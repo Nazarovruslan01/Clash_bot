@@ -113,19 +113,33 @@ def connect_adb():
 
 def running():
     import requests
-    
-    if WEB_APP_URL == "": return True
-    try:
-        response = requests.get(
-            f"{WEB_APP_URL}/{INSTANCE_ID}/running",
-            timeout=(1, 2)
-        )
-        if response.status_code == 200:
-            return response.json().get("running", False)
-        return False
-    except Exception as e:
-        if configs.DEBUG: print("running", e)
-        return False
+    from gui import get_gui
+
+    if WEB_APP_URL != "":
+        try:
+            response = requests.get(
+                f"{WEB_APP_URL}/{INSTANCE_ID}/running",
+                timeout=(1, 2)
+            )
+            if response.status_code == 200:
+                return response.json().get("running", False)
+            return False
+        except Exception as e:
+            if configs.DEBUG: print("running", e)
+            return False
+    if get_gui() is not None:
+        try:
+            response = requests.get(
+                f"http://localhost:{get_gui().server_port}/{INSTANCE_ID}/running",
+                timeout=(1, 2)
+            )
+            if response.status_code == 200:
+                return response.json().get("running", False)
+            return False
+        except Exception as e:
+            if configs.DEBUG: print("running", e)
+            return False
+    return True
 
 def check_color(color, frame, tol=10):
     import numpy as np
@@ -290,11 +304,21 @@ def get_telegram_chat_id():
 
 def send_notification(text):
     import requests
-    
+    from gui import get_gui
+
     if WEB_APP_URL != "":
         try:
             requests.post(
                 f"{WEB_APP_URL}/{INSTANCE_ID}/notify",
+                json=text,
+                timeout=(1, 2)
+            )
+        except (KeyboardInterrupt, SystemExit): raise
+        except: pass
+    if get_gui() is not None:
+        try:
+            requests.post(
+                f"http://localhost:{get_gui().server_port}/{INSTANCE_ID}/notify",
                 json=text,
                 timeout=(1, 2)
             )
@@ -590,7 +614,7 @@ class Task_Handler:
                 cls.cached_exclusions = res.json().get("exclusions", [])
         elif configs.LOCAL_GUI:
             res = requests.get(
-                f"http://localhost:{get_gui().server_port}/exclude",
+                f"http://localhost:{get_gui().server_port}/{INSTANCE_ID}/exclude",
                 timeout=(10, 20)
             )
             if res.status_code == 200:
@@ -699,7 +723,7 @@ class Task_Handler:
             return "builder_apprentice" in cls.get_exclusions(**kwargs)
         except (KeyboardInterrupt, SystemExit): raise
         except:
-            return not configs.ASSIGN_BUILDER_APPRENTICE
+            return not configs.ASSIGN_BUILDER_ASSISTANT
 
 class OCR_Handler:
     

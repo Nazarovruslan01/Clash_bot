@@ -23,6 +23,7 @@ class Instance:
         self.id = id if id is not None else ""
         self.run_status = ""
         self.end_time = 0
+        self.notifications = []
         task_settings = {
             "heroes": not UPGRADE_HEROES,
             "home_base": not UPGRADE_HOME_BASE,
@@ -32,7 +33,7 @@ class Instance:
             "home_attacks": not ATTACK_HOME_BASE,
             "builder_attacks": not ATTACK_BUILDER_BASE,
             "lab_assistant": not ASSIGN_LAB_ASSISTANT,
-            "builder_apprentice": not ASSIGN_BUILDER_APPRENTICE,
+            "builder_apprentice": not ASSIGN_BUILDER_ASSISTANT,
         }
         self.exclusions = set(k for k, v in task_settings.items() if v)
 
@@ -119,6 +120,15 @@ def handle_exclude(id):
         elif action == "remove":
             instance.exclusions.discard(item)
     return {"exclusions": sorted(list(instance.exclusions))}
+
+@app.route("/<id>/notify", methods=["POST"])
+def handle_notify(id):
+    instance = instances.get(id)
+    if not instance: abort(404)
+    data = request.json
+    if data:
+        instance.notifications.append(data)
+    return jsonify(1)
 
 def find_open_port():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:

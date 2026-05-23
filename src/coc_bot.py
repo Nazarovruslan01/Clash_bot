@@ -32,7 +32,7 @@ class CoC_Bot:
         if get_gui() is not None:
             try:
                 requests.post(
-                    f"http://localhost:{get_gui().server_port}/status",
+                    f"http://localhost:{get_gui().server_port}/{utils.INSTANCE_ID}/status",
                     json={"status": status},
                     timeout=(1, 2)
                 )

@@ -36,24 +36,6 @@ class Upgrader:
     # 💰 Resource & Builder Tracking
     # ============================================================
 
-    def get_resources(self, timeout=60):
-        import time
-        
-        start = time.time()
-        while time.time() < start + timeout:
-            try:
-                section = Frame_Handler.get_frame_section(0.8, 0, 0.96, 0.30, high_contrast=True, thresh=240)
-                if configs.DEBUG: Frame_Handler.save_frame(section, "debug/resources.png")
-                text = OCR_Handler.get_text(section)
-                if configs.DEBUG: print(text)
-                gold, elixir, dark_elixir = [int(fix_digits(s.replace(' ', ''))) for s in text]
-                return {"gold": gold, "elixir": elixir, "dark_elixir": dark_elixir}
-            except (KeyboardInterrupt, SystemExit): raise
-            except Exception as e:
-                if configs.DEBUG: print("get_resources", e)
-            time.sleep(0.5)
-        raise Exception("Failed to get resources")
-
     def home_lab_available(self, timeout=60):
         import time, cv2
         
@@ -567,20 +549,18 @@ class Upgrader:
             # Find other upgrades label
             other_template = self._get_other_upgrade_template()[0]
             x_other, y_other = Frame_Handler.locate(other_template, thresh=0.70, grayscale=False)
-            if y_other is not None: menu_ref_pos = y_other
-            else: menu_ref_pos = y_sug
-            
+
             # Move ongoing upgrades out of view
             if configs.START_FROM_MENU_TOP:
                 Input_Handler.swipe_up(x=x_sug, y1=y_sug, y2=0.15, duration=0, hold_end_time=100, inter_points=10)
             else:
                 for _ in range(5): Input_Handler.swipe_up(x=x_sug, y1=menu_bottom-0.05, y2=0.15, duration=0, hold_end_time=0, inter_points=10)
-            
+
             # Find upgrade text
             if type(upgrade_text) == str: upgrade_text = [upgrade_text]
             templates = [render_text(text, "CCBackBeat", 27) for text in upgrade_text]
             np.random.shuffle(templates)
-            
+
             def locate_template(templates):
                 frame = Frame_Handler.get_frame(grayscale=False)
                 frame_gray = Frame_Handler.grayscale(frame)
@@ -596,7 +576,7 @@ class Upgrader:
                                 return x, y
                             # Or if it is left aligned to "New" label
                             new_x, new_y = Frame_Handler.locate(render_text("New", "CCBackBeat", 27, color=(13, 255, 13)), filter_color((13, 255, 13), section), thresh=0.70, grayscale=False, ref="rc")
-                            print(menu_left, x, menu_right, y)
+                            if configs.DEBUG: print(menu_left, x, menu_right, y)
                             if new_x is not None and new_y is not None and abs(x - (menu_left + new_x/section.shape[1])) < 0.05:
                                 return x, y
                 return None, None
@@ -757,22 +737,20 @@ class Upgrader:
             # Find other upgrades label
             other_template = self._get_other_upgrade_template()[0]
             x_other, y_other = Frame_Handler.locate(other_template, thresh=0.70, grayscale=False)
-            if y_other is not None: menu_ref_pos = y_other
-            else: menu_ref_pos = y_sug
-            
+
             # Move ongoing upgrades out of view
             if configs.START_FROM_MENU_TOP:
                 Input_Handler.swipe_up(x=x_sug, y1=y_sug, y2=0.15, duration=0, hold_end_time=100, inter_points=10)
             else:
                 for _ in range(5): Input_Handler.swipe_up(x=x_sug, y1=menu_bottom-0.05, y2=0.15, duration=0, hold_end_time=0, inter_points=10)
-            
+
             # Find upgrade text
             if type(upgrade_text) == str: upgrade_text = [upgrade_text]
             templates = [render_text(text, "CCBackBeat", 27) for text in upgrade_text]
             combined = list(zip(templates, upgrade_text))
             np.random.shuffle(combined)
             templates, upgrade_text = zip(*combined)
-            
+
             def locate_template(templates, names):
                 frame = Frame_Handler.get_frame(grayscale=False)
                 frame_gray = Frame_Handler.grayscale(frame)
@@ -791,7 +769,7 @@ class Upgrader:
                             if new_x is not None and new_y is not None and abs(x - (menu_left + new_x/section.shape[1])) < 0.05:
                                 return x, y, name
                 return None, None, None
-            
+
             x, y, upgrade_name = self._scroll_locate_upgrade(
                 lambda: locate_template(templates, upgrade_text),
                 menu_left,
@@ -800,7 +778,7 @@ class Upgrader:
                 menu_bottom,
                 dir="down" if configs.START_FROM_MENU_TOP else "up"
             )
-            
+
             if x is None or y is None: return None
             Input_Handler.click(x, y)
             time.sleep(0.5)
@@ -896,15 +874,13 @@ class Upgrader:
             # Find other upgrades label
             other_template = self._get_other_upgrade_template()[0]
             x_other, y_other = Frame_Handler.locate(other_template, thresh=0.70, grayscale=False)
-            if y_other is not None: menu_ref_pos = y_other
-            else: menu_ref_pos = y_sug
-            
+
             # Move ongoing upgrades out of view
             if configs.START_FROM_MENU_TOP:
                 Input_Handler.swipe_up(x=x_sug, y1=y_sug, y2=0.15, duration=0, hold_end_time=100, inter_points=10)
             else:
                 for _ in range(5): Input_Handler.swipe_up(x=x_sug, y1=menu_bottom-0.05, y2=0.15, duration=0, hold_end_time=0, inter_points=10)
-            
+
             # Find upgrade text
             if type(upgrade_text) == str: upgrade_text = [upgrade_text]
             templates = [render_text(text, "CCBackBeat", 27) for text in upgrade_text]
