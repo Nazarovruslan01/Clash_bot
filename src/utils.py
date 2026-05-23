@@ -17,6 +17,7 @@ else:
     CACHE_PATH = Path(__file__).parent / "cache.json"
 
 INSTANCE_ID = None
+GUI_SERVER_PORT = None
 ADB_ADDRESS, ADB_DEVICE, MINITOUCH_DEVICE = None, None, None
 ADB_WINDOW_DIMS = WINDOW_DIMS
 
@@ -57,6 +58,11 @@ def init_instance(id):
         except (KeyboardInterrupt, SystemExit): raise
         except Exception as e:
             if configs.DEBUG: print("init_instance", e)
+
+def _local_gui_port():
+    from gui import get_gui
+    gui = get_gui()
+    return gui.server_port if gui is not None else GUI_SERVER_PORT
 
 def disable_sleep():
     import sys, subprocess, ctypes, os, shutil
@@ -113,7 +119,6 @@ def connect_adb():
 
 def running():
     import requests
-    from gui import get_gui
 
     if WEB_APP_URL != "":
         try:
@@ -127,10 +132,11 @@ def running():
         except Exception as e:
             if configs.DEBUG: print("running", e)
             return False
-    if get_gui() is not None:
+    port = _local_gui_port()
+    if port is not None:
         try:
             response = requests.get(
-                f"http://localhost:{get_gui().server_port}/{INSTANCE_ID}/running",
+                f"http://localhost:{port}/{INSTANCE_ID}/running",
                 timeout=(1, 2)
             )
             if response.status_code == 200:
@@ -304,7 +310,6 @@ def get_telegram_chat_id():
 
 def send_notification(text):
     import requests
-    from gui import get_gui
 
     if WEB_APP_URL != "":
         try:
@@ -315,10 +320,11 @@ def send_notification(text):
             )
         except (KeyboardInterrupt, SystemExit): raise
         except: pass
-    if get_gui() is not None:
+    port = _local_gui_port()
+    if port is not None:
         try:
             requests.post(
-                f"http://localhost:{get_gui().server_port}/{INSTANCE_ID}/notify",
+                f"http://localhost:{port}/{INSTANCE_ID}/notify",
                 json=text,
                 timeout=(1, 2)
             )
@@ -601,8 +607,7 @@ class Task_Handler:
     @classmethod
     def get_exclusions(cls, use_cached=False):
         import requests
-        from gui import get_gui
-        
+
         if use_cached:
             return cls.cached_exclusions
         if WEB_APP_URL != "":
@@ -613,12 +618,14 @@ class Task_Handler:
             if res.status_code == 200:
                 cls.cached_exclusions = res.json().get("exclusions", [])
         elif configs.LOCAL_GUI:
-            res = requests.get(
-                f"http://localhost:{get_gui().server_port}/{INSTANCE_ID}/exclude",
-                timeout=(10, 20)
-            )
-            if res.status_code == 200:
-                cls.cached_exclusions = res.json().get("exclusions", [])
+            port = _local_gui_port()
+            if port is not None:
+                res = requests.get(
+                    f"http://localhost:{port}/{INSTANCE_ID}/exclude",
+                    timeout=(10, 20)
+                )
+                if res.status_code == 200:
+                    cls.cached_exclusions = res.json().get("exclusions", [])
         return cls.cached_exclusions
 
     @classmethod

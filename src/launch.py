@@ -1,9 +1,11 @@
-def launch_proc(id):
+def launch_proc(id, gui_server_port=None):
+    import utils
     from log import enable_logging
-    from utils import init_instance
     from coc_bot import CoC_Bot
-    
-    init_instance(id)
+
+    if gui_server_port is not None:
+        utils.GUI_SERVER_PORT = gui_server_port
+    utils.init_instance(id)
     enable_logging(id)
     bot = CoC_Bot()
     bot.run()
@@ -23,8 +25,10 @@ def gui_launch(args):
     
     if utils.DISABLE_DEVICE_SLEEP: Process(target=utils.disable_sleep).start()
     
+    server_port = get_gui().server_port
+
     if args.id is not None:
-        p = Process(target=launch_proc, args=(args.id,))
+        p = Process(target=launch_proc, args=(args.id, server_port))
         p.start()
         procs[args.id] = p
     try:
@@ -33,7 +37,7 @@ def gui_launch(args):
             if data == -1: raise SystemExit
             action, id = data.get("action"), data.get("id")
             if action == "start":
-                p = Process(target=launch_proc, args=(data.get("id"),))
+                p = Process(target=launch_proc, args=(data.get("id"), server_port))
                 p.start()
                 procs[id] = p
             elif action == "stop":
