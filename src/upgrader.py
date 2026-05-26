@@ -3,7 +3,10 @@ import configs
 from configs import *
 
 class Upgrader:
-    
+
+    _WALL_UPGRADE_NAME = "wall"
+    _MAX_UPGRADE_RETRIES = 3
+
     hero_names = [
         "Barbarian King",
         "Archer Queen",
@@ -753,7 +756,6 @@ class Upgrader:
         if not exclude_base:
             counter = 0
             retry_count = 0
-            MAX_RETRIES = 3
             while counter < MAX_UPGRADES_PER_CHECK:
                 counter += 1
                 try:
@@ -767,16 +769,18 @@ class Upgrader:
                         if final_builders < initial_builders:
                             upgrades_started.append(upgraded)
                             retry_count = 0
-                        elif final_builders == initial_builders and upgraded != "wall":
+                        elif final_builders == initial_builders and upgraded != self._WALL_UPGRADE_NAME:
                             retry_count += 1
-                            if retry_count >= MAX_RETRIES:
-                                break
+                            if retry_count >= self._MAX_UPGRADE_RETRIES:
+                                retry_count = 0
+                                continue
                             time.sleep(1)
                         else:
                             retry_count = 0
                     else: break
                 except (KeyboardInterrupt, SystemExit): raise
-                except: pass
+                except Exception as e:
+                    if configs.DEBUG: print("run_home_base upgrade loop:", e)
         if not Task_Handler.builder_apprentice_excluded():
             self.assign_builder_apprentice()
         
@@ -815,7 +819,6 @@ class Upgrader:
         if not exclude_base:
             counter = 0
             retry_count = 0
-            MAX_RETRIES = 3
             while counter < MAX_UPGRADES_PER_CHECK:
                 counter += 1
                 try:
@@ -829,17 +832,19 @@ class Upgrader:
                         if final_builders < initial_builders:
                             upgrades_started.append(upgraded)
                             retry_count = 0
-                        elif final_builders == initial_builders and upgraded != "wall":
+                        elif final_builders == initial_builders and upgraded != self._WALL_UPGRADE_NAME:
                             retry_count += 1
-                            if retry_count >= MAX_RETRIES:
-                                break
+                            if retry_count >= self._MAX_UPGRADE_RETRIES:
+                                retry_count = 0
+                                continue
                             time.sleep(1)
                         else:
                             retry_count = 0
                     else: break
                 except (KeyboardInterrupt, SystemExit): raise
-                except: pass
-        
+                except Exception as e:
+                    if configs.DEBUG: print("run_builder_base upgrade loop:", e)
+
         # Lab upgrades
         lab_upgrades_started = []
         try:
