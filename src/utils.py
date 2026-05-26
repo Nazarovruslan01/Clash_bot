@@ -92,8 +92,13 @@ def enable_sleep():
     elif sys.platform == "win32":
         ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS)
 
+def safe_adb_shell(cmd, timeout=30):
+    if ADB_DEVICE is None:
+        raise RuntimeError("ADB_DEVICE is None")
+    return ADB_DEVICE.shell(cmd, timeout=timeout)
+
 def to_system_home():
-    ADB_DEVICE.shell("input keyevent KEYCODE_HOME", timeout=30)
+    safe_adb_shell("input keyevent KEYCODE_HOME", timeout=30)
 
 def connect_adb():
     global ADB_DEVICE, MINITOUCH_DEVICE, ADB_WINDOW_DIMS
@@ -450,7 +455,7 @@ def start_coc(timeout=120):
         start = time.time()
         while time.time() - start < timeout:
             if not running(): return False
-            ADB_DEVICE.shell(f"am start {'-S' if i==0 else ''} -W -n com.supercell.clashofclans/com.supercell.titan.GameApp", timeout=30)
+            safe_adb_shell(f"am start {'-S' if i==0 else ''} -W -n com.supercell.clashofclans/com.supercell.titan.GameApp", timeout=30)
             time.sleep(25)
             Frame_Handler.get_frame()
 
@@ -482,9 +487,10 @@ def start_coc(timeout=120):
         return False
 
 def reset_devices():
-    global ADB_DEVICE, MINITOUCH_DEVICE
+    global ADB_DEVICE, MINITOUCH_DEVICE, ADB_WINDOW_DIMS
     ADB_DEVICE = None
     MINITOUCH_DEVICE = None
+    ADB_WINDOW_DIMS = WINDOW_DIMS
 
 def stop_coc():
     from datetime import datetime
@@ -493,7 +499,7 @@ def stop_coc():
         return
     print("Stopping CoC...", datetime.now().strftime("%I:%M:%S %p %m-%d-%Y"))
     try:
-        ADB_DEVICE.shell("am force-stop com.supercell.clashofclans", timeout=30)
+        safe_adb_shell("am force-stop com.supercell.clashofclans", timeout=30)
     except (KeyboardInterrupt, SystemExit): raise
     except Exception as e:
         if configs.DEBUG: print("stop_coc force-stop failed:", e)
@@ -506,7 +512,7 @@ def stop_coc():
 
 def update_coc(timeout=10):
     import uiautomator2 as u2
-    ADB_DEVICE.shell('am start -a android.intent.action.VIEW -d "market://details?id=com.supercell.clashofclans"', timeout=30)
+    safe_adb_shell('am start -a android.intent.action.VIEW -d "market://details?id=com.supercell.clashofclans"', timeout=30)
     try:
         u2.connect(ADB_ADDRESS)(text="Play").click(timeout=timeout)
         for _ in range(3): u2.connect(ADB_ADDRESS)(text="Play").click(timeout=0)
@@ -860,6 +866,7 @@ Asset_Manager.load_fonts()
 class Input_Handler:
     @classmethod
     def down(cls, x, y, pointer=0):
+        if MINITOUCH_DEVICE is None: raise RuntimeError("MINITOUCH_DEVICE is None")
         from pyminitouch import CommandBuilder
         if x < 0: x = 1 + x
         if y < 0: y = 1 + y
@@ -873,6 +880,7 @@ class Input_Handler:
 
     @classmethod
     def up(cls, pointer=0):
+        if MINITOUCH_DEVICE is None: raise RuntimeError("MINITOUCH_DEVICE is None")
         from pyminitouch import CommandBuilder
         builder = CommandBuilder()
         builder.up(pointer)
@@ -880,6 +888,7 @@ class Input_Handler:
 
     @classmethod
     def click(cls, x, y, n=1, delay=0, pointer=0):
+        if MINITOUCH_DEVICE is None: raise RuntimeError("MINITOUCH_DEVICE is None")
         import time
         from pyminitouch import CommandBuilder
         if x < 0: x = 1 + x
@@ -904,17 +913,19 @@ class Input_Handler:
     def click_back(cls, n=1, delay=0):
         import time
         for _ in range(n):
-            ADB_DEVICE.shell("input keyevent 4", timeout=5)
+            safe_adb_shell("input keyevent 4", timeout=5)
             time.sleep(delay)
 
     @classmethod
     def multi_click(cls, x1, y1, x2, y2, duration=0):
+        if MINITOUCH_DEVICE is None: raise RuntimeError("MINITOUCH_DEVICE is None")
         MAX_X = int(MINITOUCH_DEVICE.connection.max_x)
         MAX_Y = int(MINITOUCH_DEVICE.connection.max_y)
         MINITOUCH_DEVICE.tap([(x1*MAX_X, y1*MAX_Y), (x2*MAX_X, y2*MAX_Y)], duration=duration)
 
     @classmethod
     def swipe(cls, x1, y1, x2, y2, duration=100, hold_end_time=0, inter_points=0, pointer=0):
+        if MINITOUCH_DEVICE is None: raise RuntimeError("MINITOUCH_DEVICE is None")
         import time, numpy as np
         from pyminitouch import CommandBuilder
         
@@ -965,10 +976,11 @@ class Input_Handler:
 
     @classmethod
     def zoom(cls, dir="out", percent=1.0):
+        if MINITOUCH_DEVICE is None: raise RuntimeError("MINITOUCH_DEVICE is None")
         from pyminitouch import CommandBuilder
-        
+
         builder = CommandBuilder()
-        
+
         MAX_X = int(MINITOUCH_DEVICE.connection.max_x)
         MAX_Y = int(MINITOUCH_DEVICE.connection.max_y)
         
@@ -1025,6 +1037,7 @@ class Frame_Handler:
             with cls._frame_lock:
                 frame = cls.cached_frame.copy()
         else:
+            if ADB_DEVICE is None: raise RuntimeError("ADB_DEVICE is None")
             frame = np.array(ADB_DEVICE.screenshot())
             frame = cv2.resize(frame, WINDOW_DIMS, interpolation=cv2.INTER_NEAREST)
             with cls._frame_lock:
