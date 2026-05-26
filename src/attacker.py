@@ -122,10 +122,11 @@ class Attacker:
         dists_discrete[closest_dist > tol] = np.nan
         
         # Remove partially visible card edges
-        remove_left = 0
-        remove_right = len(dists_discrete) - 1
-        while dists_discrete[remove_left] != dist_categories[2]: remove_left += 1
-        while dists_discrete[remove_right] != dist_categories[2]: remove_right -= 1
+        card_width_indices = np.where(dists_discrete == dist_categories[2])[0]
+        if len(card_width_indices) == 0:
+            raise RuntimeError("No card-width gap found in troop bar — cannot detect troop positions")
+        remove_left = card_width_indices[0]
+        remove_right = card_width_indices[-1]
         peaks = peaks[remove_left:remove_right+2]
         peaks_norm = peaks_norm[remove_left:remove_right+2]
         dists_discrete = dists_discrete[remove_left:remove_right+1]
