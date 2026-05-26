@@ -92,6 +92,11 @@ def enable_sleep():
     elif sys.platform == "win32":
         ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS)
 
+def safe_adb_shell(cmd, timeout=30):
+    if ADB_DEVICE is None:
+        raise RuntimeError("ADB_DEVICE is None")
+    return ADB_DEVICE.shell(cmd, timeout=timeout)
+
 def to_system_home():
     safe_adb_shell("input keyevent KEYCODE_HOME", timeout=30)
 
@@ -482,14 +487,10 @@ def start_coc(timeout=120):
         return False
 
 def reset_devices():
-    global ADB_DEVICE, MINITOUCH_DEVICE
+    global ADB_DEVICE, MINITOUCH_DEVICE, ADB_WINDOW_DIMS
     ADB_DEVICE = None
     MINITOUCH_DEVICE = None
-
-def safe_adb_shell(cmd, timeout=30):
-    if ADB_DEVICE is None:
-        raise RuntimeError("ADB_DEVICE is None")
-    return ADB_DEVICE.shell(cmd, timeout=timeout)
+    ADB_WINDOW_DIMS = WINDOW_DIMS
 
 def stop_coc():
     from datetime import datetime
@@ -498,7 +499,7 @@ def stop_coc():
         return
     print("Stopping CoC...", datetime.now().strftime("%I:%M:%S %p %m-%d-%Y"))
     try:
-        ADB_DEVICE.shell("am force-stop com.supercell.clashofclans", timeout=30)
+        safe_adb_shell("am force-stop com.supercell.clashofclans", timeout=30)
     except (KeyboardInterrupt, SystemExit): raise
     except Exception as e:
         if configs.DEBUG: print("stop_coc force-stop failed:", e)
