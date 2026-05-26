@@ -50,22 +50,18 @@ class Instance:
     
     def add_notification(self, data):
         self.notifications.append({"time_stamp": time.time(), "data": str(data)})
-        update_known_instances()
 
 instances = {}
 _lock = threading.RLock()
 
 def get_cache():
-    if os.path.exists(CACHE_PATH):
-        try:
-            with open(CACHE_PATH, "r") as f:
-                return json.load(f)
-        except:
-            return {}
-    return {}
+    try:
+        with open(CACHE_PATH, "r") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
 
 def get_known_instances():
-    global instances
     data = get_cache()
     known_instances = data.get("known_instances", {})
     for id in known_instances:
@@ -113,13 +109,13 @@ def handle_current_time():
 
 @app.route("/<id>/end_time", methods=["GET", "POST"])
 def handle_end_time(id):
-    global instances
     instance = instances.get(id)
     if not instance: abort(404)
     if request.method == "POST":
         data = request.json.get("time", 0)
-        instance.end_time = int(data) * 60 + time.time()
-        update_known_instances()
+        with _lock:
+            instance.end_time = int(data) * 60 + time.time()
+            update_known_instances()
     
     return {"end_time": instance.end_time}
 
@@ -131,38 +127,40 @@ def handle_running(id):
 
 @app.route("/<id>/status", methods=["GET", "POST"])
 def handle_status(id):
-    global instances
     instance = instances.get(id)
     if not instance: abort(404)
     if request.method == "POST":
         data = request.json
-        instance.run_status = data.get("status", "")
-        update_known_instances()
+        with _lock:
+            instance.run_status = data.get("status", "")
+            update_known_instances()
 
     return {"status": instance.run_status}
 
 @app.route("/<id>/exclude", methods=["GET", "POST"])
 def handle_exclude(id):
-    global instances
     instance = instances.get(id)
     if not instance: abort(404)
     if request.method == "POST":
         data = request.json
         action = data.get("action", "")
         item = data.get("item", "")
-        if action == "add":
-            instance.exclusions.add(item)
-        elif action == "remove":
-            instance.exclusions.discard(item)
+        with _lock:
+            if action == "add":
+                instance.exclusions.add(item)
+            elif action == "remove":
+                instance.exclusions.discard(item)
+            update_known_instances()
     return {"exclusions": sorted(list(instance.exclusions))}
 
 @app.route("/<id>/notify", methods=["POST"])
 def handle_notify(id):
-    global instances
     data = request.json
     instance = instances.get(id)
     if not instance: abort(404)
-    instance.add_notification(data)
+    with _lock:
+        instance.add_notification(data)
+        update_known_instances()
     return jsonify({"status": "success", "received": data})
 
 @app.route("/<id>/notifications", methods=["POST"])
@@ -175,7 +173,6 @@ def handle_notifications(id):
 
 @app.route("/instances", methods=["GET", "POST"])
 def handle_instances():
-    global instances
     if request.method == "POST":
         data = request.json
         id = str(data.get("id", "")).strip()
