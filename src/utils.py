@@ -583,13 +583,19 @@ def require_exit(n=5, delay=0.1):
 
 class Exit_Handler:
     RUN_AT_EXIT = []
-    
+
     @classmethod
     def register(cls, func):
         import atexit
         atexit.register(func)
         cls.RUN_AT_EXIT.append(func)
         return func
+
+    @classmethod
+    def unregister(cls, func):
+        import atexit
+        atexit.unregister(func)
+        cls.RUN_AT_EXIT = [f for f in cls.RUN_AT_EXIT if f != func]
 
     @classmethod
     def handle_sig(cls, sig, frame):

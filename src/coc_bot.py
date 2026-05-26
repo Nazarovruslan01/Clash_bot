@@ -73,6 +73,7 @@ class CoC_Bot:
 
     def _recover(self):
         if utils.MINITOUCH_DEVICE is not None:
+            utils.Exit_Handler.unregister(utils.MINITOUCH_DEVICE.stop)
             try:
                 utils.MINITOUCH_DEVICE.stop()
             except (KeyboardInterrupt, SystemExit): raise
