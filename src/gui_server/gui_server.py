@@ -12,8 +12,11 @@ sys.path.append(str(path))
 import os
 import time
 import socket
+from collections import deque
 from flask import Flask, render_template, jsonify, abort, request
 from configs import *
+
+NOTIFICATION_CACHE_SIZE = 3
 
 app = Flask(__name__)
 bot_pipe = None
@@ -23,7 +26,7 @@ class Instance:
         self.id = id if id is not None else ""
         self.run_status = ""
         self.end_time = 0
-        self.notifications = []
+        self.notifications = deque(maxlen=NOTIFICATION_CACHE_SIZE)
         task_settings = {
             "heroes": not UPGRADE_HEROES,
             "home_base": not UPGRADE_HOME_BASE,
@@ -63,6 +66,8 @@ def handle_instance(id):
 @app.route("/instance", methods=["POST"])
 def handle_instance_start_stop():
     data = request.json
+    if data is None:
+        return jsonify(0)
     action = data.get("action", "")
     id = data.get("id", "")
     if action == "start":
@@ -88,15 +93,16 @@ def handle_end_time(id):
     instance = instances.get(id)
     if not instance: abort(404)
     if request.method == "POST":
-        data = request.json.get("time", 0)
-        instance.end_time = int(data) * 60 + time.time()
+        data = request.json
+        if data is not None:
+            instance.end_time = int(data.get("time", 0)) * 60 + time.time()
     return {"end_time": instance.end_time}
 
 @app.route("/<id>/running", methods=["GET"])
 def handle_running(id):
     instance = instances.get(id)
     if not instance: abort(404)
-    return {"running": instance.end_time == 0 or instance.end_time < time.time()}
+    return {"running": instance.end_time == 0 or instance.end_time > time.time()}
 
 @app.route("/<id>/status", methods=["GET", "POST"])
 def handle_status(id):
@@ -104,7 +110,8 @@ def handle_status(id):
     if not instance: abort(404)
     if request.method == "POST":
         data = request.json
-        instance.run_status = data.get("status", "")
+        if data is not None:
+            instance.run_status = data.get("status", "")
     return {"status": instance.run_status}
 
 @app.route("/<id>/exclude", methods=["GET", "POST"])
@@ -113,8 +120,12 @@ def handle_exclude(id):
     if not instance: abort(404)
     if request.method == "POST":
         data = request.json
+        if data is None:
+            return {"exclusions": sorted(list(instance.exclusions))}
         action = data.get("action", "")
-        item = data.get("item", "")
+        item = str(data.get("item", "")).strip()
+        if not item:
+            return jsonify({"status": "error", "message": "Invalid item"}), 400
         if action == "add":
             instance.exclusions.add(item)
         elif action == "remove":
