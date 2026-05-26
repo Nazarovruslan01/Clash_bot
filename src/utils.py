@@ -2,6 +2,7 @@ import sys
 import threading
 from pathlib import Path
 from functools import lru_cache
+from typing import overload
 import configs
 from configs import *
 
@@ -1064,7 +1065,19 @@ class Frame_Handler:
         cls.save_frame(frame, filename)
     
     @classmethod
-    def locate(cls, template, frame=None, grayscale=True, thresh=0, ref="cc", null_val=None, return_confidence=False, return_all=False, use_cached=False):
+    @overload
+    def locate(cls, template, frame=None, grayscale=True, thresh=0.0, ref="cc", null_val=None, return_confidence=False, return_all=True, use_cached=False) -> list[tuple[float, float]]: ...
+    @classmethod
+    @overload
+    def locate(cls, template, frame=None, grayscale=True, thresh=0.0, ref="cc", null_val=None, return_confidence=True, return_all=True, use_cached=False) -> list[tuple[float, float, float]]: ...
+    @classmethod
+    @overload
+    def locate(cls, template, frame=None, grayscale=True, thresh=0.0, ref="cc", null_val=None, return_confidence=True, return_all=False, use_cached=False) -> tuple[float | None, float | None, float]: ...
+    @classmethod
+    @overload
+    def locate(cls, template, frame=None, grayscale=True, thresh=0.0, ref="cc", null_val=None, return_confidence=False, return_all=False, use_cached=False) -> tuple[float | None, float | None]: ...
+    @classmethod
+    def locate(cls, template, frame=None, grayscale=True, thresh=0.0, ref="cc", null_val=None, return_confidence=False, return_all=False, use_cached=False):
         import cv2, numpy as np
         
         if grayscale: template = cls.grayscale(template)
@@ -1119,7 +1132,19 @@ class Frame_Handler:
         return null_val, null_val
 
     @classmethod
-    def batch_locate(cls, templates, frame=None, grayscale=True, thresh=0, ref="cc", null_val=None, return_confidence=False, return_all=False, use_cached=False):
+    @overload
+    def batch_locate(cls, templates, frame=None, grayscale=True, thresh=0.0, ref="cc", null_val=None, return_confidence=False, return_all=True, use_cached=False) -> list[list[tuple[float, float]]]: ...
+    @classmethod
+    @overload
+    def batch_locate(cls, templates, frame=None, grayscale=True, thresh=0.0, ref="cc", null_val=None, return_confidence=True, return_all=True, use_cached=False) -> list[list[tuple[float, float, float]]]: ...
+    @classmethod
+    @overload
+    def batch_locate(cls, templates, frame=None, grayscale=True, thresh=0.0, ref="cc", null_val=None, return_confidence=True, return_all=False, use_cached=False) -> list[tuple[float | None, float | None, float]]: ...
+    @classmethod
+    @overload
+    def batch_locate(cls, templates, frame=None, grayscale=True, thresh=0.0, ref="cc", null_val=None, return_confidence=False, return_all=False, use_cached=False) -> list[tuple[float | None, float | None]]: ...
+    @classmethod
+    def batch_locate(cls, templates, frame=None, grayscale=True, thresh=0.0, ref="cc", null_val=None, return_confidence=False, return_all=False, use_cached=False):
         from concurrent.futures import ThreadPoolExecutor
         
         if cls.pool is None:
