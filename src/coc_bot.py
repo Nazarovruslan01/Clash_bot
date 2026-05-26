@@ -71,6 +71,21 @@ class CoC_Bot:
                 return True
         return False
 
+    def _recover(self):
+        if utils.MINITOUCH_DEVICE is not None:
+            utils.Exit_Handler.unregister(utils.MINITOUCH_DEVICE.stop)
+            try:
+                utils.MINITOUCH_DEVICE.stop()
+            except (KeyboardInterrupt, SystemExit): raise
+            except Exception as e:
+                if configs.DEBUG: print("_recover: minitouch stop failed:", e)
+        utils.reset_devices()
+
+        if not self.check_bluestacks():
+            print("_recover: BlueStacks not running, restarting...")
+            self.start_bluestacks()
+        self.connect_adb()
+
     def connect_adb(self):
         import time
         for _ in range(120):
@@ -90,13 +105,16 @@ class CoC_Bot:
     
     def run(self):
         import time
-        
+
+        _err_count = 0
+
         while True:
             try:
                 if not running():
+                    _err_count = 0
                     time.sleep(1)
                     continue
-                
+
                 if start_coc():
                     self.update_status("now")
 
@@ -141,12 +159,26 @@ class CoC_Bot:
                     to_home_base()
                     stop_coc()
                     self.update_status(time.time())
-                
+
+                _err_count = 0
                 time.sleep(CHECK_INTERVAL)
-            
+
             except (KeyboardInterrupt, SystemExit): raise
             except Exception as e:
                 print(f"[ERROR] {e}")
-                stop_coc()
+                try:
+                    stop_coc()
+                except (KeyboardInterrupt, SystemExit): raise
+                except Exception as se:
+                    if configs.DEBUG: print("stop_coc in error handler failed:", se)
                 self.update_status("error")
-                time.sleep(10)
+                delay = min(10 * 2 ** _err_count, 300)
+                print(f"Recovering in {delay}s (attempt {_err_count + 1})...")
+                time.sleep(delay)
+                try:
+                    self._recover()
+                    _err_count = 0
+                except (KeyboardInterrupt, SystemExit): raise
+                except Exception as re:
+                    print(f"[RECOVER ERROR] {re}")
+                    _err_count += 1

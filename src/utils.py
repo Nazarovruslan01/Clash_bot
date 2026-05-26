@@ -481,11 +481,27 @@ def start_coc(timeout=120):
     except:
         return False
 
+def reset_devices():
+    global ADB_DEVICE, MINITOUCH_DEVICE
+    ADB_DEVICE = None
+    MINITOUCH_DEVICE = None
+
 def stop_coc():
     from datetime import datetime
+    if ADB_DEVICE is None:
+        if configs.DEBUG: print("stop_coc: ADB_DEVICE is None, skipping.")
+        return
     print("Stopping CoC...", datetime.now().strftime("%I:%M:%S %p %m-%d-%Y"))
-    ADB_DEVICE.shell("am force-stop com.supercell.clashofclans", timeout=30)
-    to_system_home()
+    try:
+        ADB_DEVICE.shell("am force-stop com.supercell.clashofclans", timeout=30)
+    except (KeyboardInterrupt, SystemExit): raise
+    except Exception as e:
+        if configs.DEBUG: print("stop_coc force-stop failed:", e)
+    try:
+        to_system_home()
+    except (KeyboardInterrupt, SystemExit): raise
+    except Exception as e:
+        if configs.DEBUG: print("stop_coc to_system_home failed:", e)
     print("CoC stopped", datetime.now().strftime("%I:%M:%S %p %m-%d-%Y"))
 
 def update_coc(timeout=10):
@@ -567,13 +583,19 @@ def require_exit(n=5, delay=0.1):
 
 class Exit_Handler:
     RUN_AT_EXIT = []
-    
+
     @classmethod
     def register(cls, func):
         import atexit
         atexit.register(func)
         cls.RUN_AT_EXIT.append(func)
         return func
+
+    @classmethod
+    def unregister(cls, func):
+        import atexit
+        atexit.unregister(func)
+        cls.RUN_AT_EXIT = [f for f in cls.RUN_AT_EXIT if f != func]
 
     @classmethod
     def handle_sig(cls, sig, frame):
