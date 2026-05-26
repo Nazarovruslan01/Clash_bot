@@ -144,14 +144,17 @@ def handle_exclude(id):
     if request.method == "POST":
         data = request.json
         action = data.get("action", "")
-        item = data.get("item", "")
+        item = str(data.get("item", "")).strip()
+        if not item:
+            return jsonify({"status": "error", "message": "Invalid item"}), 400
         with _lock:
             if action == "add":
                 instance.exclusions.add(item)
             elif action == "remove":
                 instance.exclusions.discard(item)
             update_known_instances()
-    return {"exclusions": sorted(list(instance.exclusions))}
+    with _lock:
+        return {"exclusions": sorted(list(instance.exclusions))}
 
 @app.route("/<id>/notify", methods=["POST"])
 def handle_notify(id):
