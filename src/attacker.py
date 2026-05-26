@@ -101,7 +101,7 @@ class Attacker:
         assert len(frame.shape) == 3 and frame.shape[2] == 3
         frame_color = frame.copy()
         frame_gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
-        orig_h, orig_w = frame_gray.shape
+        _, orig_w = frame_gray.shape
         frame_color = frame_color[:, max(0, int(orig_w*clip_left)-10):min(orig_w, int(orig_w*clip_right)+10)]
         frame_gray = frame_gray[:, max(0, int(orig_w*clip_left)-10):min(orig_w, int(orig_w*clip_right)+10)]
         frame_gray = cv2.equalizeHist(frame_gray)
@@ -158,10 +158,10 @@ class Attacker:
                 number_locs = Frame_Handler.batch_locate([render_text(str(n), "SupercellMagic", 25) for n in range(0, 12)], frame=count_section, grayscale=True, thresh=0.8, ref="cc")
                 
                 count = 1
-                for i in reversed(range(0, 12)):
-                    loc = number_locs[i]
+                for n in reversed(range(0, 12)):
+                    loc = number_locs[n]
                     if loc[0] is not None and loc[1] is not None:
-                        count = i
+                        count = n
                         break
                 
                 # Clan troops either have a clan badge rather than a smooth background
@@ -330,9 +330,14 @@ class Attacker:
             
             # Complete an attack
             if self.start_normal_attack(timeout):
+                print("  [Home] Attack started")
                 self.complete_normal_attack(restart=restart, exclude_clan_troops=EXCLUDE_CLAN_TROOPS)
-        
+                print("  [Home] Attack completed")
+            else:
+                print("  [Home] No attack available")
+
         except Exception as e:
+            print(f"  [Home] Attack error: {e}")
             if configs.DEBUG: print("attack_home_base", e)
 
     @require_exit()
@@ -352,7 +357,12 @@ class Attacker:
             
             # Complete an attack
             if self.start_builder_attack(timeout):
+                print("  [Builder] Attack started")
                 self.complete_builder_attack(restart=restart)
-        
+                print("  [Builder] Attack completed")
+            else:
+                print("  [Builder] No attack available")
+
         except Exception as e:
+            print(f"  [Builder] Attack error: {e}")
             if configs.DEBUG: print("attack_builder_base", e)

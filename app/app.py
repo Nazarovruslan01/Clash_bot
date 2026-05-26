@@ -8,6 +8,7 @@ from flask_cors import CORS
 
 PATH = Path(__file__).parent
 CACHE_PATH = PATH / "data" / "cache.json"
+CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
 NOTIFICATION_CACHE_SIZE = 3
 
 app = Flask(__name__)
@@ -19,14 +20,14 @@ class Instance:
         id,
         run_status="",
         end_time=0,
-        exclusions=set(),
-        notifications=deque(maxlen=NOTIFICATION_CACHE_SIZE)
+        exclusions=None,
+        notifications=None,
     ):
         self.id = id
         self.run_status = run_status
         self.end_time = end_time
-        self.exclusions = exclusions
-        self.notifications = notifications
+        self.exclusions = exclusions if exclusions is not None else set()
+        self.notifications = notifications if notifications is not None else deque(maxlen=NOTIFICATION_CACHE_SIZE)
     
     def __eq__(self, other):
         return self.id == other.id
@@ -48,10 +49,7 @@ class Instance:
     
     def add_notification(self, data):
         self.notifications.append({"time_stamp": time.time(), "data": str(data)})
-        data = get_cache()
-        data["known_instances"][self.id] = self.to_dict()
-        with open(CACHE_PATH, "w") as f:
-            json.dump(data, f, indent=4)
+        update_known_instances()
 
 instances = {}
 
@@ -67,12 +65,6 @@ def get_cache():
 def get_known_instances():
     global instances
     data = get_cache()
-    if os.path.exists(CACHE_PATH):
-        try:
-            with open(CACHE_PATH, "r") as f:
-                data = json.load(f)
-        except:
-            data = {}
     known_instances = data.get("known_instances", {})
     for id in known_instances:
         id = str(id)
@@ -169,10 +161,11 @@ def handle_notify(id):
 
 @app.route("/<id>/notifications", methods=["POST"])
 def handle_notifications(id):
-    n = request.json
     instance = instances.get(id)
     if not instance: abort(404)
-    return jsonify(instance.get_notifications(n))
+    n = request.json
+    limit = n if isinstance(n, int) else NOTIFICATION_CACHE_SIZE
+    return jsonify(instance.get_notifications(limit))
 
 @app.route("/instances", methods=["GET", "POST"])
 def handle_instances():

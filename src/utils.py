@@ -1,4 +1,5 @@
 import sys
+import threading
 from pathlib import Path
 from functools import lru_cache
 import configs
@@ -92,7 +93,7 @@ def enable_sleep():
         ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS)
 
 def to_system_home():
-    ADB_DEVICE.shell("input keyevent KEYCODE_HOME")
+    ADB_DEVICE.shell("input keyevent KEYCODE_HOME", timeout=30)
 
 def connect_adb():
     global ADB_DEVICE, MINITOUCH_DEVICE, ADB_WINDOW_DIMS
@@ -265,22 +266,23 @@ def to_int_array(*args):
     import numpy as np
     return np.array(list(map(int, args)))
 
+@lru_cache(maxsize=128)
+def _get_font(font_name, font_size):
+    from PIL import ImageFont
+    font_path = Asset_Manager.fonts.get(font_name)
+    return ImageFont.truetype(font_path, font_size)
+
 def render_text(text, font, font_size, color=(255, 255, 255)):
     import numpy as np
-    from PIL import Image, ImageDraw, ImageFont
-    
-    @lru_cache(maxsize=32)
-    def get_font(font, font_size):
-        font_path = Asset_Manager.fonts.get(font)
-        return ImageFont.truetype(font_path, font_size)
-    
-    font = get_font(font, font_size)
+    from PIL import Image, ImageDraw
+
+    pil_font = _get_font(font, font_size)
     temp = Image.new("RGB", (1, 1))
-    bbox = ImageDraw.Draw(temp).textbbox((0, 0), text, font=font)
+    bbox = ImageDraw.Draw(temp).textbbox((0, 0), text, font=pil_font)
     w = bbox[2] - bbox[0]
     h = bbox[3] - bbox[1]
     render = Image.new("RGB", (w, h), (0, 0, 0))
-    ImageDraw.Draw(render).text((-bbox[0], -bbox[1]), text, font=font, fill=color)
+    ImageDraw.Draw(render).text((-bbox[0], -bbox[1]), text, font=pil_font, fill=color)
     render = np.array(render)
     return render
 
@@ -413,24 +415,22 @@ def to_home_base():
             return
 
 def get_home_builders(timeout=60, return_amount=True, raise_exception=True, use_cached_frame=False):
-    import time, cv2
-    
+    import time, cv2, re
+
     start = time.time()
     while True:
         try:
-            section = Frame_Handler.get_frame_section(0.49, 0.04, -0.455, 0.08, high_contrast=True, use_cached=use_cached_frame)
+            section = Frame_Handler.get_frame_section(0.43, 0.03, 0.53, 0.09, high_contrast=True, use_cached=use_cached_frame)
             if configs.DEBUG: Frame_Handler.save_frame(section, "debug/home_builders.png")
-            
-            slash = cv2.cvtColor(Asset_Manager.upgrader_assets["slash"], cv2.COLOR_RGB2GRAY)
-            res = cv2.matchTemplate(section, slash, cv2.TM_CCOEFF_NORMED)
-            _, max_val, _, _ = cv2.minMaxLoc(res)
-            if raise_exception and max_val < 0.9: raise Exception("Slash not found")
-            
-            if not return_amount: return max_val >= 0.9
-            
+
             text = fix_digits(''.join(OCR_Handler.get_text(section)).replace(' ', '').replace('/', ''))
-            available = int(text[0])
-            return available
+            match = re.search(r'\d+', text)
+            if not match:
+                if raise_exception: raise Exception("No builder count found")
+                return 0 if return_amount else False
+
+            available = int(match.group()[0])
+            return available if return_amount else True
         except (KeyboardInterrupt, SystemExit): raise
         except Exception as e:
             if configs.DEBUG: print("get_home_builders", e)
@@ -438,7 +438,7 @@ def get_home_builders(timeout=60, return_amount=True, raise_exception=True, use_
         if time.time() > start + timeout: break
     raise Exception("Failed to get home builders")
 
-def start_coc(timeout=60):
+def start_coc(timeout=120):
     import time
     from datetime import datetime
     
@@ -450,29 +450,27 @@ def start_coc(timeout=60):
         start = time.time()
         while time.time() - start < timeout:
             if not running(): return False
-            ADB_DEVICE.shell(f"am start {'-S' if i==0 else ''} -W -n com.supercell.clashofclans/com.supercell.titan.GameApp")
-            Input_Handler.click_exit(4, 0.1)
-            
+            ADB_DEVICE.shell(f"am start {'-S' if i==0 else ''} -W -n com.supercell.clashofclans/com.supercell.titan.GameApp", timeout=30)
+            time.sleep(25)
             Frame_Handler.get_frame()
-            
+
             try:
-                get_home_builders(1, return_amount=False, use_cached_frame=True)
+                get_home_builders(10, return_amount=False, use_cached_frame=True)
                 break
             except (KeyboardInterrupt, SystemExit): raise
             except: pass
-            
+
             try:
-                get_builder_builders(1, return_amount=False, use_cached_frame=True)
+                get_builder_builders(10, return_amount=False, use_cached_frame=True)
                 break
             except (KeyboardInterrupt, SystemExit): raise
             except: pass
-            
+
             cont_x, cont_y = Frame_Handler.locate(Asset_Manager.misc_assets["continue"], grayscale=False, thresh=0.8, ref="cc", use_cached=True)
             if cont_x is not None and cont_y is not None:
                 Input_Handler.click(cont_x, cont_y)
-            
+
             i += 1
-            time.sleep(1)
         if time.time() - start > timeout:
             stop_coc()
             update_coc()
@@ -486,13 +484,13 @@ def start_coc(timeout=60):
 def stop_coc():
     from datetime import datetime
     print("Stopping CoC...", datetime.now().strftime("%I:%M:%S %p %m-%d-%Y"))
-    ADB_DEVICE.shell("am force-stop com.supercell.clashofclans")
+    ADB_DEVICE.shell("am force-stop com.supercell.clashofclans", timeout=30)
     to_system_home()
     print("CoC stopped", datetime.now().strftime("%I:%M:%S %p %m-%d-%Y"))
 
 def update_coc(timeout=10):
     import uiautomator2 as u2
-    ADB_DEVICE.shell('am start -a android.intent.action.VIEW -d "market://details?id=com.supercell.clashofclans"')
+    ADB_DEVICE.shell('am start -a android.intent.action.VIEW -d "market://details?id=com.supercell.clashofclans"', timeout=30)
     try:
         u2.connect(ADB_ADDRESS)(text="Play").click(timeout=timeout)
         for _ in range(3): u2.connect(ADB_ADDRESS)(text="Play").click(timeout=0)
@@ -532,24 +530,22 @@ def to_builder_base():
         Input_Handler.swipe(x1=0.5, y1=0.5, x2=0.25, y2=0.75, hold_end_time=100)
 
 def get_builder_builders(timeout=60, return_amount=True, raise_exception=True, use_cached_frame=False):
-    import time, cv2
-    
+    import time, cv2, re
+
     start = time.time()
     while True:
         try:
-            section = Frame_Handler.get_frame_section(0.565, 0.04, -0.38, 0.08, high_contrast=True, use_cached=use_cached_frame)
+            section = Frame_Handler.get_frame_section(0.56, 0.03, 0.66, 0.09, high_contrast=True, use_cached=use_cached_frame)
             if configs.DEBUG: Frame_Handler.save_frame(section, "debug/builder_builders.png")
-            
-            slash = cv2.cvtColor(Asset_Manager.upgrader_assets["slash"], cv2.COLOR_RGB2GRAY)
-            res = cv2.matchTemplate(section, slash, cv2.TM_CCOEFF_NORMED)
-            _, max_val, _, _ = cv2.minMaxLoc(res)
-            if raise_exception and max_val < 0.9: raise Exception("Slash not found")
-            
-            if not return_amount: return max_val >= 0.9
-            
+
             text = fix_digits(''.join(OCR_Handler.get_text(section)).replace(' ', '').replace('/', ''))
-            available = int(text[0])
-            return available
+            match = re.search(r'\d+', text)
+            if not match:
+                if raise_exception: raise Exception("No builder count found")
+                return 0 if return_amount else False
+
+            available = int(match.group()[0])
+            return available if return_amount else True
         except (KeyboardInterrupt, SystemExit): raise
         except Exception as e:
             if configs.DEBUG: print("get_builder_builders", e)
@@ -564,7 +560,7 @@ def require_exit(n=5, delay=0.1):
             try: result = func(*args, **kwargs)
             except (KeyboardInterrupt, SystemExit): raise
             except: pass
-            Input_Handler.click_exit(n, delay)
+            Input_Handler.click_back(n, delay)
             return result
         return wrapper
     return decorator
@@ -880,7 +876,14 @@ class Input_Handler:
 
     @classmethod
     def click_exit(cls, n=1, delay=0):
-        cls.click(0.99, 0.99, n, delay=delay)
+        cls.click(0.02, 0.02, n, delay=delay)
+
+    @classmethod
+    def click_back(cls, n=1, delay=0):
+        import time
+        for _ in range(n):
+            ADB_DEVICE.shell("input keyevent 4", timeout=5)
+            time.sleep(delay)
 
     @classmethod
     def multi_click(cls, x1, y1, x2, y2, duration=0):
@@ -969,6 +972,7 @@ class Input_Handler:
 class Frame_Handler:
     pool = None
     cached_frame = None
+    _frame_lock = threading.Lock()
     
     @classmethod
     def grayscale(cls, frame):
@@ -996,11 +1000,13 @@ class Frame_Handler:
     def get_frame(cls, grayscale=True, high_contrast=False, thresh=200, use_cached=False):
         import cv2, numpy as np
         if use_cached and cls.cached_frame is not None:
-            frame = cls.cached_frame.copy()
+            with cls._frame_lock:
+                frame = cls.cached_frame.copy()
         else:
             frame = np.array(ADB_DEVICE.screenshot())
             frame = cv2.resize(frame, WINDOW_DIMS, interpolation=cv2.INTER_NEAREST)
-            cls.cached_frame = frame.copy()
+            with cls._frame_lock:
+                cls.cached_frame = frame.copy()
         if configs.DEBUG: cls.save_frame(frame, "debug/frame.png")
         if high_contrast: frame = cls.high_contrast(frame, thresh)
         elif grayscale: frame = cls.grayscale(frame)
@@ -1096,7 +1102,13 @@ class Scheduler:
     from apscheduler.schedulers.background import BackgroundScheduler
     scheduler = BackgroundScheduler()
     scheduler.start()
-    # Exit_Handler.register(scheduler.shutdown)
+    @staticmethod
+    def _shutdown_scheduler():
+        try:
+            Scheduler.scheduler.shutdown()
+        except Exception:
+            pass
+    Exit_Handler.register(_shutdown_scheduler)
     
     add_job = scheduler.add_job
 

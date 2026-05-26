@@ -17,8 +17,7 @@ class CoC_Bot:
     
     def update_status(self, status):
         import requests
-        from gui import get_gui
-        
+
         if WEB_APP_URL != "":
             try:
                 requests.post(
@@ -29,10 +28,12 @@ class CoC_Bot:
             except (KeyboardInterrupt, SystemExit): raise
             except Exception as e:
                 if configs.DEBUG: print("update_status", e)
-        if get_gui() is not None:
+
+        gui_port = utils._local_gui_port()
+        if gui_port is not None:
             try:
                 requests.post(
-                    f"http://localhost:{get_gui().server_port}/{utils.INSTANCE_ID}/status",
+                    f"http://localhost:{gui_port}/{utils.INSTANCE_ID}/status",
                     json={"status": status},
                     timeout=(1, 2)
                 )
@@ -98,37 +99,45 @@ class CoC_Bot:
                 
                 if start_coc():
                     self.update_status("now")
-                    
+
                     Task_Handler.get_exclusions()
                     exclude_home_base = Task_Handler.home_base_excluded(use_cached=True)
                     exclude_home_lab = Task_Handler.home_lab_excluded(use_cached=True)
                     skip_home_base_upgrades = exclude_home_base and exclude_home_lab
                     exclude_home_attacks = Task_Handler.home_attacks_excluded(use_cached=True)
-                    
+
                     exclude_builder_base = Task_Handler.builder_base_excluded(use_cached=True)
                     exclude_builder_lab = Task_Handler.builder_lab_excluded(use_cached=True)
                     skip_builder_base_upgrades = exclude_builder_base and exclude_builder_lab
                     exclude_builder_attacks = Task_Handler.builder_attacks_excluded(use_cached=True)
-                    
+
+                    from datetime import datetime
+                    print(f"\n{'='*44}")
+                    print(f"Run {datetime.now().strftime('%I:%M:%S %p %m-%d-%Y')}")
+                    print(f"  Home:    upgrades={'on ' if not skip_home_base_upgrades else 'off'}  attacks={'on ' if not exclude_home_attacks else 'off'}")
+                    print(f"  Builder: upgrades={'on ' if not skip_builder_base_upgrades else 'off'}  attacks={'on ' if not exclude_builder_attacks else 'off'}")
+
                     # Check home base
                     if not skip_home_base_upgrades or not exclude_home_attacks:
                         to_home_base()
-                    
+                        self.upgrader.collect_resources()
+
                     if not skip_home_base_upgrades:
                         self.upgrader.run_home_base(exclude_home_base, exclude_home_lab)
                     if not exclude_home_attacks:
                         self.attacker.run_home_base(restart=not skip_home_base_upgrades or not skip_builder_base_upgrades)
-                    
+
                     # Check builder base
                     if not skip_builder_base_upgrades or not exclude_builder_attacks:
                         to_builder_base()
-                    
-                    if not skip_builder_base_upgrades:
+
+                    if not skip_builder_base_upgrades or not exclude_builder_attacks:
                         self.upgrader.collect_builder_attack_elixir()
+                    if not skip_builder_base_upgrades:
                         self.upgrader.run_builder_base(exclude_builder_base, exclude_builder_lab)
                     if not exclude_builder_attacks:
                         self.attacker.run_builder_base()
-                    
+
                     to_home_base()
                     stop_coc()
                     self.update_status(time.time())
@@ -137,6 +146,7 @@ class CoC_Bot:
             
             except (KeyboardInterrupt, SystemExit): raise
             except Exception as e:
-                print(e)
+                print(f"[ERROR] {e}")
                 stop_coc()
                 self.update_status("error")
+                time.sleep(10)

@@ -2,10 +2,11 @@ import configs
 
 COC_BOT_GUI = None
 
-def run_gui(server_port, pipe, debug=False):
+def run_gui(server_port, pipe, id=None, debug=False):
     import webview
-    
-    url = f"http://127.0.0.1:{server_port}"
+
+    path = f"/{id}" if id else ""
+    url = f"http://127.0.0.1:{server_port}{path}"
     window = webview.create_window(
         "CoC Bot",
         url=url,
@@ -33,7 +34,7 @@ class GUI:
         self.server_proc = Process(target=start_server, args=(child_conn, id, debug,))
         self.server_proc.start()
         self.server_port = self.pipe.recv()
-        self.window_proc = Process(target=run_gui, args=(self.server_port, child_conn, self.debug))
+        self.window_proc = Process(target=run_gui, args=(self.server_port, child_conn, self.id, self.debug))
     
     def start(self):
         self.window_proc.start()

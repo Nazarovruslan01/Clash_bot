@@ -138,17 +138,19 @@ def find_open_port():
 def start_server(pipe, id=None, debug=False):
     global bot_pipe
     bot_pipe = pipe
-    
+
     if not debug:
         sys.stdout = open(os.devnull, 'w')
         sys.stderr = open(os.devnull, 'w')
 
     if id is not None:
         instances[id] = Instance(id)
-    
+
     port = find_open_port()
-    bot_pipe.send(port)
-    app.run(port=port, debug=DEBUG)
+    from werkzeug.serving import make_server
+    server = make_server('127.0.0.1', port, app)
+    bot_pipe.send(port)  # send only after server socket is bound and ready
+    server.serve_forever()
 
 if __name__ == "__main__":
     from multiprocessing import Pipe
