@@ -1,6 +1,7 @@
 import os
 import time
 import json
+import threading
 from pathlib import Path
 from collections import deque
 from flask import Flask, render_template, jsonify, abort, request
@@ -52,6 +53,7 @@ class Instance:
         update_known_instances()
 
 instances = {}
+_lock = threading.RLock()
 
 def get_cache():
     if os.path.exists(CACHE_PATH):
@@ -78,14 +80,18 @@ def get_known_instances():
         )
 
 def update_known_instances():
-    global instances
-    data = {id: instances[id].to_dict() for id in instances}
-    with open(CACHE_PATH, "w") as f:
-        json.dump({"known_instances": data}, f, indent=4)
+    with _lock:
+        data = {id: instances[id].to_dict() for id in instances}
+        tmp_path = CACHE_PATH.with_suffix('.tmp')
+        with open(tmp_path, "w") as f:
+            json.dump({"known_instances": data}, f, indent=4)
+        os.replace(tmp_path, CACHE_PATH)
 
 @app.route("/", methods=["GET"])
 def home():
-    return render_template("home.html", ids=sorted(instances.keys()))
+    with _lock:
+        ids = sorted(instances.keys())
+    return render_template("home.html", ids=ids)
 
 @app.route("/<id>", methods=["GET"])
 def handle_instance(id):
@@ -121,7 +127,7 @@ def handle_end_time(id):
 def handle_running(id):
     instance = instances.get(id)
     if not instance: abort(404)
-    return {"running": instance.end_time == 0 or instance.end_time < time.time()}
+    return {"running": instance.end_time == 0 or instance.end_time > time.time()}
 
 @app.route("/<id>/status", methods=["GET", "POST"])
 def handle_status(id):
@@ -175,12 +181,14 @@ def handle_instances():
         id = str(data.get("id", "")).strip()
         if id == "":
             return jsonify({"status": "error", "message": "Invalid ID"}), 400
-        if id not in instances:
-            instances[id] = Instance(id)
-            update_known_instances()
+        with _lock:
+            if id not in instances:
+                instances[id] = Instance(id)
+                update_known_instances()
         return jsonify({"status": "success", "id": id})
 
-    return jsonify({"ids": sorted(instances.keys())})
+    with _lock:
+        return jsonify({"ids": sorted(instances.keys())})
 
 @app.after_request
 def add_cache_headers(response):
