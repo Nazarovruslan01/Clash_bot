@@ -74,12 +74,11 @@ class CoC_Bot:
     def _recover(self):
         if utils.MINITOUCH_DEVICE is not None:
             try:
-                utils.MINITOUCH_DEVICE.connection.close()
+                utils.MINITOUCH_DEVICE.stop()
             except (KeyboardInterrupt, SystemExit): raise
             except Exception as e:
-                if configs.DEBUG: print("_recover: minitouch close failed:", e)
-        utils.ADB_DEVICE = None
-        utils.MINITOUCH_DEVICE = None
+                if configs.DEBUG: print("_recover: minitouch stop failed:", e)
+        utils.reset_devices()
 
         if not self.check_bluestacks():
             print("_recover: BlueStacks not running, restarting...")
@@ -111,6 +110,7 @@ class CoC_Bot:
         while True:
             try:
                 if not running():
+                    _err_count = 0
                     time.sleep(1)
                     continue
 
