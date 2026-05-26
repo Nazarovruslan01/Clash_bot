@@ -2,7 +2,11 @@ import sys
 import threading
 from pathlib import Path
 from functools import lru_cache
-from typing import overload
+from typing import TYPE_CHECKING, Any, Literal, overload
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
+else:
+    NDArray = Any
 import configs
 from configs import *
 
@@ -1066,18 +1070,18 @@ class Frame_Handler:
     
     @classmethod
     @overload
-    def locate(cls, template, frame=None, grayscale=True, thresh=0.0, ref="cc", null_val=None, return_confidence=False, return_all=True, use_cached=False) -> list[tuple[float, float]]: ...
+    def locate(cls, template: NDArray, frame: NDArray | None = None, grayscale: bool = True, thresh: float = 0.0, ref: Literal["cc", "lc", "rc", "cb", "rb", "lb", "cr", "lr", "rr", "br"] = "cc", null_val: int | None = None, return_confidence: bool = False, return_all: bool = True, use_cached: bool = False) -> list[tuple[float, float]]: ...
     @classmethod
     @overload
-    def locate(cls, template, frame=None, grayscale=True, thresh=0.0, ref="cc", null_val=None, return_confidence=True, return_all=True, use_cached=False) -> list[tuple[float, float, float]]: ...
+    def locate(cls, template: NDArray, frame: NDArray | None = None, grayscale: bool = True, thresh: float = 0.0, ref: Literal["cc", "lc", "rc", "cb", "rb", "lb", "cr", "lr", "rr", "br"] = "cc", null_val: int | None = None, return_confidence: bool = True, return_all: bool = True, use_cached: bool = False) -> list[tuple[float, float, float]]: ...
     @classmethod
     @overload
-    def locate(cls, template, frame=None, grayscale=True, thresh=0.0, ref="cc", null_val=None, return_confidence=True, return_all=False, use_cached=False) -> tuple[float | None, float | None, float]: ...
+    def locate(cls, template: NDArray, frame: NDArray | None = None, grayscale: bool = True, thresh: float = 0.0, ref: Literal["cc", "lc", "rc", "cb", "rb", "lb", "cr", "lr", "rr", "br"] = "cc", null_val: int | None = None, return_confidence: bool = True, return_all: bool = False, use_cached: bool = False) -> tuple[float | None, float | None, float]: ...
     @classmethod
     @overload
-    def locate(cls, template, frame=None, grayscale=True, thresh=0.0, ref="cc", null_val=None, return_confidence=False, return_all=False, use_cached=False) -> tuple[float | None, float | None]: ...
+    def locate(cls, template: NDArray, frame: NDArray | None = None, grayscale: bool = True, thresh: float = 0.0, ref: Literal["cc", "lc", "rc", "cb", "rb", "lb", "cr", "lr", "rr", "br"] = "cc", null_val: int | None = None, return_confidence: bool = False, return_all: bool = False, use_cached: bool = False) -> tuple[float | None, float | None]: ...
     @classmethod
-    def locate(cls, template, frame=None, grayscale=True, thresh=0.0, ref="cc", null_val=None, return_confidence=False, return_all=False, use_cached=False):
+    def locate(cls, template: NDArray, frame: NDArray | None = None, grayscale: bool = True, thresh: float = 0.0, ref: Literal["cc", "lc", "rc", "cb", "rb", "lb", "cr", "lr", "rr", "br"] = "cc", null_val: int | None = None, return_confidence: bool = False, return_all: bool = False, use_cached: bool = False):
         import cv2, numpy as np
         
         if grayscale: template = cls.grayscale(template)
@@ -1133,18 +1137,18 @@ class Frame_Handler:
 
     @classmethod
     @overload
-    def batch_locate(cls, templates, frame=None, grayscale=True, thresh=0.0, ref="cc", null_val=None, return_confidence=False, return_all=True, use_cached=False) -> list[list[tuple[float, float]]]: ...
+    def batch_locate(cls, templates: list[NDArray], frame: NDArray | None = None, grayscale: bool = True, thresh: float = 0.0, ref: Literal["cc", "lc", "rc", "cb", "rb", "lb", "cr", "lr", "rr", "br"] = "cc", null_val: int | None = None, return_confidence: bool = False, return_all: bool = True, use_cached: bool = False) -> list[list[tuple[float, float]]]: ...
     @classmethod
     @overload
-    def batch_locate(cls, templates, frame=None, grayscale=True, thresh=0.0, ref="cc", null_val=None, return_confidence=True, return_all=True, use_cached=False) -> list[list[tuple[float, float, float]]]: ...
+    def batch_locate(cls, templates: list[NDArray], frame: NDArray | None = None, grayscale: bool = True, thresh: float = 0.0, ref: Literal["cc", "lc", "rc", "cb", "rb", "lb", "cr", "lr", "rr", "br"] = "cc", null_val: int | None = None, return_confidence: bool = True, return_all: bool = True, use_cached: bool = False) -> list[list[tuple[float, float, float]]]: ...
     @classmethod
     @overload
-    def batch_locate(cls, templates, frame=None, grayscale=True, thresh=0.0, ref="cc", null_val=None, return_confidence=True, return_all=False, use_cached=False) -> list[tuple[float | None, float | None, float]]: ...
+    def batch_locate(cls, templates: list[NDArray], frame: NDArray | None = None, grayscale: bool = True, thresh: float = 0.0, ref: Literal["cc", "lc", "rc", "cb", "rb", "lb", "cr", "lr", "rr", "br"] = "cc", null_val: int | None = None, return_confidence: bool = True, return_all: bool = False, use_cached: bool = False) -> list[tuple[float | None, float | None, float]]: ...
     @classmethod
     @overload
-    def batch_locate(cls, templates, frame=None, grayscale=True, thresh=0.0, ref="cc", null_val=None, return_confidence=False, return_all=False, use_cached=False) -> list[tuple[float | None, float | None]]: ...
+    def batch_locate(cls, templates: list[NDArray], frame: NDArray | None = None, grayscale: bool = True, thresh: float = 0.0, ref: Literal["cc", "lc", "rc", "cb", "rb", "lb", "cr", "lr", "rr", "br"] = "cc", null_val: int | None = None, return_confidence: bool = False, return_all: bool = False, use_cached: bool = False) -> list[tuple[float | None, float | None]]: ...
     @classmethod
-    def batch_locate(cls, templates, frame=None, grayscale=True, thresh=0.0, ref="cc", null_val=None, return_confidence=False, return_all=False, use_cached=False):
+    def batch_locate(cls, templates: list[NDArray], frame: NDArray | None = None, grayscale: bool = True, thresh: float = 0.0, ref: Literal["cc", "lc", "rc", "cb", "rb", "lb", "cr", "lr", "rr", "br"] = "cc", null_val: int | None = None, return_confidence: bool = False, return_all: bool = False, use_cached: bool = False):
         from concurrent.futures import ThreadPoolExecutor
         
         if cls.pool is None:
