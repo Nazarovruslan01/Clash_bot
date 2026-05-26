@@ -1,7 +1,7 @@
 import configs
 
 def run_gui(server_port, pipe, id=None, debug=False):
-    import webview
+    import webview  # pyright: ignore[reportMissingImports]
 
     path = f"/{id}" if id else ""
     url = f"http://127.0.0.1:{server_port}{path}"
