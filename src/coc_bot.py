@@ -72,10 +72,11 @@ class CoC_Bot:
         return False
 
     def _recover(self):
-        if utils.MINITOUCH_DEVICE is not None:
-            utils.Exit_Handler.unregister(utils.MINITOUCH_DEVICE.stop)
+        mt_device = utils.MINITOUCH_DEVICE
+        if mt_device is not None:
+            utils.Exit_Handler.unregister(mt_device.stop)
             try:
-                utils.MINITOUCH_DEVICE.stop()
+                mt_device.stop()
             except (KeyboardInterrupt, SystemExit): raise
             except Exception as e:
                 if configs.DEBUG: print("_recover: minitouch stop failed:", e)
