@@ -484,8 +484,19 @@ def start_coc(timeout=120):
 def stop_coc():
     from datetime import datetime
     print("Stopping CoC...", datetime.now().strftime("%I:%M:%S %p %m-%d-%Y"))
-    ADB_DEVICE.shell("am force-stop com.supercell.clashofclans", timeout=30)
-    to_system_home()
+    if ADB_DEVICE is not None:
+        try:
+            ADB_DEVICE.shell("am force-stop com.supercell.clashofclans", timeout=30)
+        except (KeyboardInterrupt, SystemExit): raise
+        except Exception as e:
+            if configs.DEBUG: print("stop_coc force-stop failed:", e)
+        try:
+            to_system_home()
+        except (KeyboardInterrupt, SystemExit): raise
+        except Exception as e:
+            if configs.DEBUG: print("stop_coc to_system_home failed:", e)
+    else:
+        if configs.DEBUG: print("stop_coc: ADB_DEVICE is None, skipping.")
     print("CoC stopped", datetime.now().strftime("%I:%M:%S %p %m-%d-%Y"))
 
 def update_coc(timeout=10):
