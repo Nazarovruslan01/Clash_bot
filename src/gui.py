@@ -1,7 +1,5 @@
 import configs
 
-COC_BOT_GUI = None
-
 def run_gui(server_port, pipe, id=None, debug=False):
     import webview
 
@@ -47,6 +45,8 @@ class GUI:
             self.window_proc.terminate()
             self.window_proc.join()
 
+COC_BOT_GUI: GUI | None = None
+
 def init_gui(id=None, debug=False):
     global COC_BOT_GUI
     COC_BOT_GUI = GUI(id, debug=debug)
@@ -61,4 +61,6 @@ if __name__ == "__main__":
     while True:
         try: print("GUI Received:", pipe.recv())
         except EOFError: break
-    get_gui().stop()
+    gui = get_gui()
+    if gui is not None:
+        gui.stop()
