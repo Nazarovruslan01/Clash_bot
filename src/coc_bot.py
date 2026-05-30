@@ -146,6 +146,8 @@ class CoC_Bot:
                     if not skip_home_base_upgrades:
                         self.upgrader.run_home_base(exclude_home_base, exclude_home_lab)
                     if not exclude_home_attacks:
+                        if configs.USE_TRAINING_POTION and not Task_Handler.magic_items_excluded(use_cached=True):
+                            self.upgrader.use_potion("training_potion")
                         self.attacker.run_home_base(restart=not skip_home_base_upgrades or not skip_builder_base_upgrades)
 
                     # Check builder base
@@ -155,6 +157,8 @@ class CoC_Bot:
                     if not skip_builder_base_upgrades or not exclude_builder_attacks:
                         self.upgrader.collect_builder_attack_elixir()
                     if not skip_builder_base_upgrades:
+                        if configs.USE_BUILDER_POTION and not Task_Handler.magic_items_excluded(use_cached=True):
+                            self.upgrader.use_potion("builder_potion")
                         self.upgrader.run_builder_base(exclude_builder_base, exclude_builder_lab)
                     if not exclude_builder_attacks:
                         self.attacker.run_builder_base()

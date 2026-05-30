@@ -762,6 +762,14 @@ class Task_Handler:
         except:
             return not configs.ASSIGN_BUILDER_ASSISTANT
 
+    @classmethod
+    def magic_items_excluded(cls, **kwargs):
+        try:
+            return "magic_items" in cls.get_exclusions(**kwargs)
+        except (KeyboardInterrupt, SystemExit): raise
+        except Exception:
+            return not (configs.USE_BUILDER_POTION or configs.USE_RESEARCH_POTION or configs.USE_TRAINING_POTION)
+
 class OCR_Handler:
     
     backoff_time = 0
@@ -815,6 +823,7 @@ class Asset_Manager:
     misc_assets = {}
     upgrader_assets = {}
     attacker_assets = {}
+    magic_items_assets = {}
     
     @staticmethod
     def resource_path(rel_path):
@@ -864,9 +873,21 @@ class Asset_Manager:
             assets[file.replace('.png', '')] = cv2.cvtColor(cv2.imread(path / file, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
         cls.attacker_assets = assets
 
+    @classmethod
+    def load_magic_items_assets(cls):
+        import os, cv2
+        assets = {}
+        path = cls.resource_path("assets/magic_items")
+        if not path.exists(): cls.magic_items_assets = assets; return
+        for file in os.listdir(path):
+            if not file.endswith('.png'): continue
+            assets[file.replace('.png', '')] = cv2.cvtColor(cv2.imread(path / file, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
+        cls.magic_items_assets = assets
+
 Asset_Manager.load_misc_assets()
 Asset_Manager.load_upgrader_assets()
 Asset_Manager.load_attacker_assets()
+Asset_Manager.load_magic_items_assets()
 Asset_Manager.load_fonts()
 
 class Input_Handler:
