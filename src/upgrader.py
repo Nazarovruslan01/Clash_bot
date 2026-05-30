@@ -39,6 +39,70 @@ class Upgrader:
         Input_Handler.click(0.45, 0.05)
 
     # ============================================================
+    # 🧪 Magic Items
+    # ============================================================
+
+    _POTION_NAMES = {
+        "builder_potion": "Builder Potion",
+        "research_potion": "Research Potion",
+        "training_potion": "Training Potion",
+    }
+
+    def _open_magic_items(self) -> bool:
+        import time
+        try:
+            x, y = Frame_Handler.locate(
+                Asset_Manager.magic_items_assets["magic_items_button"],
+                thresh=0.85, grayscale=False
+            )
+            if x is None or y is None: return False
+            Input_Handler.click(x, y)
+            time.sleep(1.0)
+            return True
+        except (KeyboardInterrupt, SystemExit): raise
+        except Exception as e:
+            logger.debug("_open_magic_items: %s", e)
+            return False
+
+    def _use_potion(self, potion_key: str) -> bool:
+        import time
+        try:
+            if not self._open_magic_items(): return False
+
+            x, y = Frame_Handler.locate(
+                Asset_Manager.magic_items_assets[potion_key],
+                thresh=0.85, grayscale=False
+            )
+            if x is None or y is None:
+                Input_Handler.click_back()
+                return False
+            Input_Handler.click(x, y)
+            time.sleep(0.5)
+
+            x, y = Frame_Handler.locate(
+                Asset_Manager.magic_items_assets["use_button"],
+                thresh=0.85, grayscale=False
+            )
+            if x is None or y is None:
+                Input_Handler.click_back()
+                return False
+            Input_Handler.click(x, y)
+            time.sleep(0.5)
+
+            Input_Handler.click_back()
+            return True
+        except (KeyboardInterrupt, SystemExit): raise
+        except Exception as e:
+            logger.debug("_use_potion %s: %s", potion_key, e)
+            return False
+
+    @require_exit()
+    def use_potion(self, potion_key: str) -> bool:
+        result = self._use_potion(potion_key)
+        if result: logger.info("  [Magic] Used %s", self._POTION_NAMES[potion_key])
+        return result
+
+    # ============================================================
     # 💰 Resource & Builder Tracking
     # ============================================================
 
@@ -757,6 +821,9 @@ class Upgrader:
         # Building upgrades
         upgrades_started = []
         if not exclude_base:
+            if configs.USE_BUILDER_POTION and not Task_Handler.magic_items_excluded(use_cached=True):
+                if get_home_builders(1) == 0:
+                    self.use_potion("builder_potion")
             counter = 0
             retry_count = 0
             while counter < MAX_UPGRADES_PER_CHECK:
@@ -790,7 +857,13 @@ class Upgrader:
         # Lab upgrades
         lab_upgrades_started = []
         try:
-            if not exclude_lab and self.home_lab_available(1):
+            lab_available = False
+            if not exclude_lab:
+                lab_available = self.home_lab_available(1)
+                if not lab_available and configs.USE_RESEARCH_POTION and not Task_Handler.magic_items_excluded(use_cached=True):
+                    self.use_potion("research_potion")
+                    lab_available = self.home_lab_available(1)
+            if lab_available:
                 upgraded = self.home_lab_upgrade()
                 time.sleep(0.5)
                 final_lab_avail = self.home_lab_available(1)
