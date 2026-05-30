@@ -289,6 +289,28 @@ header img {
     text-align: right;
 }
 
+/* Status dot */
+.status_dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+    background: gray;
+}
+.status_dot.status_ok     { background: #4caf50; box-shadow: 0 0 6px #4caf50; }
+.status_dot.status_paused { background: #f5a623; box-shadow: 0 0 6px #f5a623; }
+.status_dot.status_error  { background: #e46256; box-shadow: 0 0 6px #e46256; }
+
+/* Log viewer */
+.log_content { border-radius: 0.5em; overflow: hidden; }
+.log_lines   {
+    background: #1a1a1a; color: #ccc; font-family: monospace; font-size: 0.65em;
+    padding: 10px; margin: 0; max-height: 300px; overflow-y: auto;
+    white-space: pre-wrap; word-break: break-all;
+}
+
 @media (hover: hover) and (pointer: fine) {
     .instance_tag {
         position: fixed;
