@@ -1,5 +1,6 @@
 import sys
 import threading
+import logging
 from pathlib import Path
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Literal, overload
@@ -9,6 +10,8 @@ else:
     NDArray = Any
 import configs
 from configs import *
+
+logger = logging.getLogger("coc_bot")
 
 if sys.platform == "win32":
     ES_CONTINUOUS = 0x80000000
@@ -63,7 +66,7 @@ def init_instance(id):
             )
         except (KeyboardInterrupt, SystemExit): raise
         except Exception as e:
-            if configs.DEBUG: print("init_instance", e)
+            if configs.DEBUG: logger.debug("init_instance: %s", e)
 
 def _local_gui_port():
     from gui import get_gui
@@ -141,7 +144,7 @@ def running():
                 return response.json().get("running", False)
             return False
         except Exception as e:
-            if configs.DEBUG: print("running", e)
+            if configs.DEBUG: logger.debug("running: %s", e)
             return False
     port = _local_gui_port()
     if port is not None:
@@ -154,7 +157,7 @@ def running():
                 return response.json().get("running", False)
             return False
         except Exception as e:
-            if configs.DEBUG: print("running", e)
+            if configs.DEBUG: logger.debug("running: %s", e)
             return False
     return True
 
@@ -443,19 +446,18 @@ def get_home_builders(timeout=60, return_amount=True, raise_exception=True, use_
             return available if return_amount else True
         except (KeyboardInterrupt, SystemExit): raise
         except Exception as e:
-            if configs.DEBUG: print("get_home_builders", e)
+            if configs.DEBUG: logger.debug("get_home_builders: %s", e)
         time.sleep(0.5)
         if time.time() > start + timeout: break
     raise Exception("Failed to get home builders")
 
 def start_coc(timeout=120):
     import time
-    from datetime import datetime
     
     try:
         if not running(): return False
         to_system_home()
-        print("Starting CoC...", datetime.now().strftime("%I:%M:%S %p %m-%d-%Y"))
+        logger.info("Starting CoC...")
         i = 0
         start = time.time()
         while time.time() - start < timeout:
@@ -485,7 +487,7 @@ def start_coc(timeout=120):
             stop_coc()
             update_coc()
             raise Exception("Failed to start CoC")
-        print("CoC started", datetime.now().strftime("%I:%M:%S %p %m-%d-%Y"))
+        logger.info("CoC started")
         return True
     except (KeyboardInterrupt, SystemExit): raise
     except:
@@ -498,22 +500,21 @@ def reset_devices():
     ADB_WINDOW_DIMS = WINDOW_DIMS
 
 def stop_coc():
-    from datetime import datetime
     if ADB_DEVICE is None:
-        if configs.DEBUG: print("stop_coc: ADB_DEVICE is None, skipping.")
+        if configs.DEBUG: logger.debug("stop_coc: ADB_DEVICE is None, skipping")
         return
-    print("Stopping CoC...", datetime.now().strftime("%I:%M:%S %p %m-%d-%Y"))
+    logger.info("Stopping CoC...")
     try:
         safe_adb_shell("am force-stop com.supercell.clashofclans", timeout=30)
     except (KeyboardInterrupt, SystemExit): raise
     except Exception as e:
-        if configs.DEBUG: print("stop_coc force-stop failed:", e)
+        if configs.DEBUG: logger.debug("stop_coc force-stop failed: %s", e)
     try:
         to_system_home()
     except (KeyboardInterrupt, SystemExit): raise
     except Exception as e:
-        if configs.DEBUG: print("stop_coc to_system_home failed:", e)
-    print("CoC stopped", datetime.now().strftime("%I:%M:%S %p %m-%d-%Y"))
+        if configs.DEBUG: logger.debug("stop_coc to_system_home failed: %s", e)
+    logger.info("CoC stopped")
 
 def update_coc(timeout=10):
     import uiautomator2 as u2
@@ -575,7 +576,7 @@ def get_builder_builders(timeout=60, return_amount=True, raise_exception=True, u
             return available if return_amount else True
         except (KeyboardInterrupt, SystemExit): raise
         except Exception as e:
-            if configs.DEBUG: print("get_builder_builders", e)
+            if configs.DEBUG: logger.debug("get_builder_builders: %s", e)
         time.sleep(0.5)
         if time.time() > start + timeout: break
     raise Exception("Failed to get builder builders")
@@ -1098,7 +1099,7 @@ class Frame_Handler:
 
         res = cv2.matchTemplate(frame, template, cv2.TM_CCOEFF_NORMED)
         _, max_val, _, max_loc = cv2.minMaxLoc(res)
-        if configs.DEBUG: print(max_val)
+        if configs.DEBUG: logger.debug("max_val: %s", max_val)
         
         if return_all:
             ys, xs = np.where(res >= thresh)

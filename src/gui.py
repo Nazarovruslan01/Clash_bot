@@ -1,4 +1,7 @@
+import logging
 import configs
+
+logger = logging.getLogger("coc_bot")
 
 def run_gui(server_port, pipe, id=None, debug=False):
     import webview  # pyright: ignore[reportMissingImports]
@@ -59,7 +62,7 @@ def get_gui():
 if __name__ == "__main__":
     pipe = init_gui(None, debug=True)
     while True:
-        try: print("GUI Received:", pipe.recv())
+        try: logger.debug("GUI Received: %s", pipe.recv())
         except EOFError: break
     gui = get_gui()
     if gui is not None:

@@ -1,47 +1,57 @@
 import sys
-import loguru
+import logging
 import warnings
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-loguru.logger.remove()
-warnings.filterwarnings("ignore", category=UserWarning, module='torch')
+warnings.filterwarnings("ignore", category=UserWarning, module="torch")
 
-class Tee:
-    def __init__(self, *streams):
-        self.streams = streams
 
-    def write(self, data):
-        for s in self.streams:
-            try:
-                s.write(data)
-                s.flush()
-            except (KeyboardInterrupt, SystemExit): raise
-            except: pass
+def setup_logging(instance_id: str, debug: bool) -> None:
+    logger = logging.getLogger("coc_bot")
+    logger.handlers.clear()
+    logger.setLevel(logging.DEBUG)
 
-    def flush(self):
-        for s in self.streams:
-            try:
-                s.flush()
-            except (KeyboardInterrupt, SystemExit): raise
-            except: pass
+    fmt = logging.Formatter(
+        f"[%(asctime)s] [{instance_id}] [%(levelname)s] %(message)s",
+        datefmt="%I:%M:%S %p",
+    )
 
-def enable_logging(id):
+    # Console handler — only in dev mode (not frozen)
+    if not getattr(sys, "frozen", False):
+        ch = logging.StreamHandler(sys.stdout)
+        ch.setLevel(logging.DEBUG if debug else logging.INFO)
+        ch.setFormatter(fmt)
+        logger.addHandler(ch)
+
+    # File handler — always, with rotation
     if getattr(sys, "frozen", False):
-        APP_DATA_DIR = Path.home() / ".CoC_Bot"
-        APP_DATA_DIR.mkdir(exist_ok=True)
-        LOG_DIR = APP_DATA_DIR / "debug"
+        log_dir = Path.home() / ".CoC_Bot" / "debug"
     else:
-        LOG_DIR = Path("debug")
-    LOG_DIR.mkdir(exist_ok=True)
+        log_dir = Path("debug")
+    log_dir.mkdir(parents=True, exist_ok=True)
 
-    LOG_PATH = LOG_DIR / f"{id}.log"
-    log_file = open(LOG_PATH, "a", buffering=1)
-    try: LOG_PATH.chmod(0o666)
-    except: pass
+    log_path = log_dir / f"{instance_id}.log"
+    fh = RotatingFileHandler(
+        log_path,
+        maxBytes=5 * 1024 * 1024,  # 5 MB
+        backupCount=3,
+        encoding="utf-8",
+    )
+    fh.setLevel(logging.DEBUG)
+    fh.setFormatter(fmt)
+    logger.addHandler(fh)
 
-    if getattr(sys, "frozen", False):
-        sys.stdout = Tee(*[log_file])
-        sys.stderr = Tee(*[log_file])
-    else:
-        sys.stdout = Tee(*[log_file, sys.__stdout__])
-        sys.stderr = Tee(*[log_file, sys.__stderr__])
+    try:
+        log_path.chmod(0o666)
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except Exception:
+        pass
+
+    # Log uncaught exceptions instead of silently losing them in frozen mode
+    def _excepthook(exc_type, exc_value, exc_tb):
+        logger.critical("Uncaught exception", exc_info=(exc_type, exc_value, exc_tb))
+        sys.__excepthook__(exc_type, exc_value, exc_tb)
+
+    sys.excepthook = _excepthook

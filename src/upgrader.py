@@ -1,6 +1,9 @@
+import logging
 from utils import *
 import configs
 from configs import *
+
+logger = logging.getLogger("coc_bot")
 
 class Upgrader:
 
@@ -60,7 +63,7 @@ class Upgrader:
                 return available > 0
             except (KeyboardInterrupt, SystemExit): raise
             except Exception as e:
-                if configs.DEBUG: print("home_lab_available", e)
+                if configs.DEBUG: logger.debug("home_lab_available: %s", e)
             time.sleep(0.5)
         raise Exception("Failed to get home lab availability")
 
@@ -85,14 +88,14 @@ class Upgrader:
                 return available > 0
             except (KeyboardInterrupt, SystemExit): raise
             except Exception as e:
-                if configs.DEBUG: print("builder_lab_available", e)
+                if configs.DEBUG: logger.debug("builder_lab_available: %s", e)
             time.sleep(0.5)
         raise Exception("Failed to get builder lab availability")
 
     def collect_resources(self):
         import time, numpy as np
         try:
-            print("  [Home] Collecting resources...")
+            logger.info("  [Home] Collecting resources...")
             Input_Handler.zoom(dir="out")
             time.sleep(0.5)
 
@@ -105,10 +108,10 @@ class Upgrader:
                     for y in np.linspace(0.25, 0.65, 8):
                         Input_Handler.click(x, y)
 
-            print("  [Home] Resources collected")
+            logger.info("  [Home] Resources collected")
         except (KeyboardInterrupt, SystemExit): raise
         except Exception as e:
-            if configs.DEBUG: print("collect_resources", e)
+            if configs.DEBUG: logger.debug("collect_resources: %s", e)
 
     def collect_builder_attack_elixir(self):
         import time
@@ -313,7 +316,7 @@ class Upgrader:
                     dir="down" if configs.START_FROM_MENU_TOP else "up",
                 )
                 if x is None or y is None:
-                    if configs.DEBUG: print(f"_home_upgrade_once: priority item not found in menu ({upgrade_text})")
+                    if configs.DEBUG: logger.debug("_home_upgrade_once: priority item not found in menu (%s)", upgrade_text)
                     return None
                 Input_Handler.click(x_sug, y)
             else:
@@ -321,7 +324,7 @@ class Upgrader:
                 menu = Frame_Handler.get_frame_section(menu_left, menu_top, menu_right, menu_bottom, grayscale=False)
                 frame = Frame_Handler.get_frame(grayscale=False, use_cached=True)
                 potential_y_locs = self._get_potential_upgrade_locs(menu)
-                if configs.DEBUG: print(f"_home_upgrade_once: {len(potential_y_locs)} potential random upgrade rows")
+                if configs.DEBUG: logger.debug("_home_upgrade_once: %d potential random upgrade rows", len(potential_y_locs))
                 town_hall_template = [render_text("Town Hall", "CCBackBeat", 27)]
                 hero_templates = [render_text(hero, "SupercellMagic", 19) for hero in self.hero_names]
                 locs = Frame_Handler.batch_locate(town_hall_template + hero_templates, thresh=0.80, ref="lc", null_val=-1)
@@ -343,9 +346,9 @@ class Upgrader:
                     if len(potential_y_locs) > 0 and invalid_y_locs[0] != -1 and min(abs(town_hall_loc[1] - np.array(potential_y_locs))) < 0.02:
                         x_upgrade, y_upgrade = menu_center, town_hall_loc[1]
                     else:
-                        if configs.DEBUG: print("_home_upgrade_once: no valid random upgrade row found")
+                        if configs.DEBUG: logger.debug("_home_upgrade_once: no valid random upgrade row found")
                         return None
-                if configs.DEBUG: print(f"_home_upgrade_once: clicking random upgrade at ({x_upgrade:.3f}, {y_upgrade:.3f})")
+                if configs.DEBUG: logger.debug("_home_upgrade_once: clicking random upgrade at (%.3f, %.3f)", x_upgrade, y_upgrade)
                 Input_Handler.click(x_upgrade, y_upgrade)
 
             time.sleep(0.5)
@@ -359,33 +362,33 @@ class Upgrader:
                 time.sleep(0.5)
                 x, y = Frame_Handler.locate(self.assets["upgrade"], thresh=0.90, grayscale=False)
                 if x is None or y is None:
-                    if configs.DEBUG: print("_home_upgrade_once: upgrade button not found after selecting building")
+                    if configs.DEBUG: logger.debug("_home_upgrade_once: upgrade button not found after selecting building")
                     return None
                 Input_Handler.click(x, y)
                 time.sleep(0.5)
 
             x, y = Frame_Handler.locate(self.assets["upgrade_name"], ref="lc", thresh=0.9)
             if x is None or y is None:
-                if configs.DEBUG: print("_home_upgrade_once: upgrade_name label not found")
+                if configs.DEBUG: logger.debug("_home_upgrade_once: upgrade_name label not found")
                 return None
             section = Frame_Handler.get_frame_section(x+0.122, y-0.04, 1-x, y+0.035, high_contrast=True, thresh=255, use_cached=True)
             if configs.DEBUG: Frame_Handler.save_frame(section, "debug/upgrade_name.png")
             text_list = OCR_Handler.get_text(section)
             if not text_list:
-                if configs.DEBUG: print("_home_upgrade_once: OCR returned empty text for upgrade name")
+                if configs.DEBUG: logger.debug("_home_upgrade_once: OCR returned empty text for upgrade name")
                 return None
             upgrade_name = spell_check(re.sub(r"\s*x\d+$", "", text_list[0].lower()[:-3]))
 
             x, y = Frame_Handler.locate(self.assets["confirm"], grayscale=False, thresh=0.85, use_cached=True)
             if x is None or y is None:
-                if configs.DEBUG: print("_home_upgrade_once: confirm button not found")
+                if configs.DEBUG: logger.debug("_home_upgrade_once: confirm button not found")
                 return None
             Input_Handler.click(x, y+0.05)
             time.sleep(0.5)
             return upgrade_name
         except (KeyboardInterrupt, SystemExit): raise
         except Exception as e:
-            if configs.DEBUG: print("_home_upgrade_once exception:", e)
+            if configs.DEBUG: logger.debug("_home_upgrade_once exception: %s", e)
             return None
 
     @require_exit()
@@ -431,7 +434,7 @@ class Upgrader:
             time.sleep(0.5)
         except (KeyboardInterrupt, SystemExit): raise
         except Exception as e:
-            if configs.DEBUG: print("assign_builder_apprentice", e)
+            if configs.DEBUG: logger.debug("assign_builder_apprentice: %s", e)
     
     @require_exit()
     def _home_lab_upgrade_once(self, upgrade_text=None):
@@ -470,7 +473,7 @@ class Upgrader:
                                 if abs(x - menu_left) < 0.01:
                                     return x, y
                                 new_x, new_y = Frame_Handler.locate(render_text("New", "CCBackBeat", 27, color=(13, 255, 13)), filter_color((13, 255, 13), section), thresh=0.70, grayscale=False, ref="rc")
-                                if configs.DEBUG: print(menu_left, x, menu_right, y)
+                                if configs.DEBUG: logger.debug("_home_lab_upgrade_once loc: %s %s %s %s", menu_left, x, menu_right, y)
                                 if new_x is not None and new_y is not None and abs(x - (menu_left + new_x/section.shape[1])) < 0.05:
                                     return x, y
                     return None, None
@@ -514,7 +517,7 @@ class Upgrader:
             return upgrade_name
         except (KeyboardInterrupt, SystemExit): raise
         except Exception as e:
-            if configs.DEBUG: print("_home_lab_upgrade_once", e)
+            if configs.DEBUG: logger.debug("_home_lab_upgrade_once: %s", e)
             return None
 
     @require_exit()
@@ -560,7 +563,7 @@ class Upgrader:
             time.sleep(0.5)
         except (KeyboardInterrupt, SystemExit): raise
         except Exception as e:
-            if configs.DEBUG: print("assign_lab_assistant", e)
+            if configs.DEBUG: logger.debug("assign_lab_assistant: %s", e)
     
     @require_exit()
     def _builder_upgrade_once(self, upgrade_text=None):
@@ -643,7 +646,7 @@ class Upgrader:
             return upgrade_name
         except (KeyboardInterrupt, SystemExit): raise
         except Exception as e:
-            if configs.DEBUG: print("_builder_upgrade_once", e)
+            if configs.DEBUG: logger.debug("_builder_upgrade_once: %s", e)
             return None
 
     @require_exit()
@@ -728,7 +731,7 @@ class Upgrader:
             return upgrade_name
         except (KeyboardInterrupt, SystemExit): raise
         except Exception as e:
-            if configs.DEBUG: print("_builder_lab_upgrade_once", e)
+            if configs.DEBUG: logger.debug("_builder_lab_upgrade_once: %s", e)
             return None
 
     @require_exit()
@@ -780,7 +783,7 @@ class Upgrader:
                     else: break
                 except (KeyboardInterrupt, SystemExit): raise
                 except Exception as e:
-                    if configs.DEBUG: print("run_home_base upgrade loop:", e)
+                    if configs.DEBUG: logger.debug("run_home_base upgrade loop: %s", e)
         if not Task_Handler.builder_apprentice_excluded():
             self.assign_builder_apprentice()
         
@@ -793,18 +796,19 @@ class Upgrader:
                 final_lab_avail = self.home_lab_available(1)
                 if upgraded is not None and not final_lab_avail: lab_upgrades_started.append(upgraded.lower())
         except (KeyboardInterrupt, SystemExit): raise
-        except: pass
+        except Exception as e:
+            if configs.DEBUG: logger.debug("run_home_base lab upgrade: %s", e)
         if not Task_Handler.lab_assistant_excluded():
             self.assign_lab_assistant()
         
         if upgrades_started:
-            print(f"  [Home] Upgraded: {', '.join(upgrades_started)}")
+            logger.info("  [Home] Upgraded: %s", ', '.join(upgrades_started))
         else:
-            print("  [Home] No building upgrades started")
+            logger.info("  [Home] No building upgrades started")
         if lab_upgrades_started:
-            print(f"  [Home Lab] Upgraded: {', '.join(lab_upgrades_started)}")
+            logger.info("  [Home Lab] Upgraded: %s", ', '.join(lab_upgrades_started))
         else:
-            print("  [Home Lab] No lab upgrade started")
+            logger.info("  [Home Lab] No lab upgrade started")
         for upgrade in upgrades_started + lab_upgrades_started:
             send_notification(f"Started upgrading {upgrade}")
 
@@ -843,7 +847,7 @@ class Upgrader:
                     else: break
                 except (KeyboardInterrupt, SystemExit): raise
                 except Exception as e:
-                    if configs.DEBUG: print("run_builder_base upgrade loop:", e)
+                    if configs.DEBUG: logger.debug("run_builder_base upgrade loop: %s", e)
 
         # Lab upgrades
         lab_upgrades_started = []
@@ -854,15 +858,16 @@ class Upgrader:
                 final_lab_avail = self.builder_lab_available(1)
                 if upgraded is not None and not final_lab_avail: lab_upgrades_started.append(upgraded.lower())
         except (KeyboardInterrupt, SystemExit): raise
-        except: pass
+        except Exception as e:
+            if configs.DEBUG: logger.debug("run_builder_base lab upgrade: %s", e)
 
         if upgrades_started:
-            print(f"  [Builder] Upgraded: {', '.join(upgrades_started)}")
+            logger.info("  [Builder] Upgraded: %s", ', '.join(upgrades_started))
         else:
-            print("  [Builder] No building upgrades started")
+            logger.info("  [Builder] No building upgrades started")
         if lab_upgrades_started:
-            print(f"  [Builder Lab] Upgraded: {', '.join(lab_upgrades_started)}")
+            logger.info("  [Builder Lab] Upgraded: %s", ', '.join(lab_upgrades_started))
         else:
-            print("  [Builder Lab] No lab upgrade started")
+            logger.info("  [Builder Lab] No lab upgrade started")
         for upgrade in upgrades_started + lab_upgrades_started:
             send_notification(f"Started upgrading {upgrade}")

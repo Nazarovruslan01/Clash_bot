@@ -1,8 +1,11 @@
+import logging
 import utils
 from utils import *
 from configs import *
 from upgrader import Upgrader
 from attacker import Attacker
+
+logger = logging.getLogger("coc_bot")
 
 class CoC_Bot:
     def __init__(self):
@@ -27,7 +30,7 @@ class CoC_Bot:
                 )
             except (KeyboardInterrupt, SystemExit): raise
             except Exception as e:
-                if configs.DEBUG: print("update_status", e)
+                if configs.DEBUG: logger.debug("update_status: %s", e)
 
         gui_port = utils._local_gui_port()
         if gui_port is not None:
@@ -39,7 +42,7 @@ class CoC_Bot:
                 )
             except (KeyboardInterrupt, SystemExit): raise
             except Exception as e:
-                if configs.DEBUG: print("update_status", e)
+                if configs.DEBUG: logger.debug("update_status: %s", e)
     
     def start_bluestacks(self):
         import sys, subprocess, time
@@ -58,7 +61,7 @@ class CoC_Bot:
         
         for _ in range(120):
             if self.check_bluestacks():
-                if configs.DEBUG: print("BlueStacks started.")
+                if configs.DEBUG: logger.debug("BlueStacks started")
                 return
             time.sleep(0.5)
         
@@ -79,11 +82,11 @@ class CoC_Bot:
                 mt_device.stop()
             except (KeyboardInterrupt, SystemExit): raise
             except Exception as e:
-                if configs.DEBUG: print("_recover: minitouch stop failed:", e)
+                if configs.DEBUG: logger.debug("_recover: minitouch stop failed: %s", e)
         utils.reset_devices()
 
         if not self.check_bluestacks():
-            print("_recover: BlueStacks not running, restarting...")
+            logger.warning("BlueStacks not running, restarting...")
             self.start_bluestacks()
         self.connect_adb()
 
@@ -92,11 +95,11 @@ class CoC_Bot:
         for _ in range(120):
             try:
                 connect_adb()
-                if configs.DEBUG: print("Connected to ADB.")
+                if configs.DEBUG: logger.debug("Connected to ADB")
                 return
             except (KeyboardInterrupt, SystemExit): raise
             except Exception as e:
-                if configs.DEBUG: print("connect_adb", e)
+                if configs.DEBUG: logger.debug("connect_adb: %s", e)
             time.sleep(0.5)
         raise Exception("Failed to connect to ADB.")
     
@@ -130,11 +133,10 @@ class CoC_Bot:
                     skip_builder_base_upgrades = exclude_builder_base and exclude_builder_lab
                     exclude_builder_attacks = Task_Handler.builder_attacks_excluded(use_cached=True)
 
-                    from datetime import datetime
-                    print(f"\n{'='*44}")
-                    print(f"Run {datetime.now().strftime('%I:%M:%S %p %m-%d-%Y')}")
-                    print(f"  Home:    upgrades={'on ' if not skip_home_base_upgrades else 'off'}  attacks={'on ' if not exclude_home_attacks else 'off'}")
-                    print(f"  Builder: upgrades={'on ' if not skip_builder_base_upgrades else 'off'}  attacks={'on ' if not exclude_builder_attacks else 'off'}")
+                    logger.info("=" * 44)
+                    logger.info("Run started")
+                    logger.info("  Home:    upgrades=%s  attacks=%s", 'on ' if not skip_home_base_upgrades else 'off', 'on ' if not exclude_home_attacks else 'off')
+                    logger.info("  Builder: upgrades=%s  attacks=%s", 'on ' if not skip_builder_base_upgrades else 'off', 'on ' if not exclude_builder_attacks else 'off')
 
                     # Check home base
                     if not skip_home_base_upgrades or not exclude_home_attacks:
@@ -166,20 +168,20 @@ class CoC_Bot:
 
             except (KeyboardInterrupt, SystemExit): raise
             except Exception as e:
-                print(f"[ERROR] {e}")
+                logger.error("%s", e)
                 try:
                     stop_coc()
                 except (KeyboardInterrupt, SystemExit): raise
                 except Exception as se:
-                    if configs.DEBUG: print("stop_coc in error handler failed:", se)
+                    if configs.DEBUG: logger.debug("stop_coc in error handler failed: %s", se)
                 self.update_status("error")
                 delay = min(10 * 2 ** _err_count, 300)
-                print(f"Recovering in {delay}s (attempt {_err_count + 1})...")
+                logger.warning("Recovering in %ds (attempt %d)...", delay, _err_count + 1)
                 time.sleep(delay)
                 try:
                     self._recover()
                     _err_count = 0
                 except (KeyboardInterrupt, SystemExit): raise
                 except Exception as re:
-                    print(f"[RECOVER ERROR] {re}")
+                    logger.error("recover: %s", re)
                     _err_count += 1

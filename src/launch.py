@@ -1,12 +1,13 @@
 def launch_proc(id, gui_server_port=None):
+    import configs
     import utils
-    from log import enable_logging
+    from log import setup_logging
     from coc_bot import CoC_Bot
 
     if gui_server_port is not None:
         utils.GUI_SERVER_PORT = gui_server_port
     utils.init_instance(id)
-    enable_logging(id)
+    setup_logging(id, configs.DEBUG)
     bot = CoC_Bot()
     bot.run()
 
