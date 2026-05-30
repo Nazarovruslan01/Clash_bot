@@ -1,6 +1,9 @@
+import logging
 from utils import *
 import configs
 from configs import *
+
+logger = logging.getLogger("coc_bot")
 
 class Attacker:
     def __init__(self):
@@ -331,15 +334,15 @@ class Attacker:
             
             # Complete an attack
             if self.start_normal_attack(timeout):
-                print("  [Home] Attack started")
+                logger.info("Home: Attack started")
                 self.complete_normal_attack(restart=restart, exclude_clan_troops=EXCLUDE_CLAN_TROOPS)
-                print("  [Home] Attack completed")
+                logger.info("Home: Attack completed")
             else:
-                print("  [Home] No attack available")
+                logger.info("Home: No attack available")
 
         except Exception as e:
-            print(f"  [Home] Attack error: {e}")
-            if configs.DEBUG: print("attack_home_base", e)
+            logger.error("Home: Attack error: %s", e)
+            if configs.DEBUG: logger.debug("attack_home_base: %s", e)
 
     @require_exit()
     def run_builder_base(self, timeout=60, restart=True):
@@ -358,12 +361,12 @@ class Attacker:
             
             # Complete an attack
             if self.start_builder_attack(timeout):
-                print("  [Builder] Attack started")
+                logger.info("Builder: Attack started")
                 self.complete_builder_attack(restart=restart)
-                print("  [Builder] Attack completed")
+                logger.info("Builder: Attack completed")
             else:
-                print("  [Builder] No attack available")
+                logger.info("Builder: No attack available")
 
         except Exception as e:
-            print(f"  [Builder] Attack error: {e}")
-            if configs.DEBUG: print("attack_builder_base", e)
+            logger.error("Builder: Attack error: %s", e)
+            if configs.DEBUG: logger.debug("attack_builder_base: %s", e)
