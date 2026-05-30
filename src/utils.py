@@ -767,7 +767,7 @@ class Task_Handler:
         try:
             return "magic_items" in cls.get_exclusions(**kwargs)
         except (KeyboardInterrupt, SystemExit): raise
-        except:
+        except Exception:
             return not (configs.USE_BUILDER_POTION or configs.USE_RESEARCH_POTION or configs.USE_TRAINING_POTION)
 
 class OCR_Handler:

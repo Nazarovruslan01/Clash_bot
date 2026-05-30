@@ -67,6 +67,10 @@ class Upgrader:
     def _use_potion(self, potion_key: str) -> bool:
         import time
         try:
+            if potion_key not in Asset_Manager.magic_items_assets:
+                logger.warning("_use_potion: unknown potion key %r", potion_key)
+                return False
+
             if not self._open_magic_items(): return False
 
             x, y = Frame_Handler.locate(
@@ -74,6 +78,7 @@ class Upgrader:
                 thresh=0.85, grayscale=False
             )
             if x is None or y is None:
+                logger.debug("_use_potion: %s not found on screen", potion_key)
                 Input_Handler.click_back()
                 return False
             Input_Handler.click(x, y)

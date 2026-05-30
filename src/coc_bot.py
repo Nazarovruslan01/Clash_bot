@@ -157,6 +157,8 @@ class CoC_Bot:
                     if not skip_builder_base_upgrades or not exclude_builder_attacks:
                         self.upgrader.collect_builder_attack_elixir()
                     if not skip_builder_base_upgrades:
+                        if configs.USE_BUILDER_POTION and not Task_Handler.magic_items_excluded(use_cached=True):
+                            self.upgrader.use_potion("builder_potion")
                         self.upgrader.run_builder_base(exclude_builder_base, exclude_builder_lab)
                     if not exclude_builder_attacks:
                         self.attacker.run_builder_base()
