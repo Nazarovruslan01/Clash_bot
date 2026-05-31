@@ -42,7 +42,7 @@
                 --><span class="themed_text" id="countdown_time"></span><!--
                 --><span class="themed_padding" id="right_padding">.</span>
                 </p>
-                <strong class="themed_text" id="run_status" style="font-size:1em; padding:0;"></strong>
+                <span id="status_dot" class="status_dot"></span><strong class="themed_text" id="run_status" style="font-size:1em; padding:0;"></strong>
             </div>
 
             <form method="POST" class="stacked-buttons">
@@ -60,13 +60,22 @@
                 <button type="submit" name="time" value="0">Cancel</button>
             </form>
 
-            <!-- <div id="notifications" class="notifications" style="margin-top:30px;">
+            <div id="notifications" class="notifications" style="margin-top:30px;">
                 <h1 class="notifications_title">Recent Notifications</h1>
-            </div> -->
+            </div>
 
             <div id="exclusions" class="exclusions" style="margin-top:30px;">
                 <h1 class="exclusions_title">Task Settings</h1>
                 <form method="POST" class="exclusions-form"></form>
+            </div>
+
+            <div id="log_viewer" style="margin-top:30px;">
+                <h1 class="exclusions_title" id="log_toggle" style="cursor:pointer;">
+                    Logs <span id="log_arrow">▼</span>
+                </h1>
+                <div id="log_content" class="log_content" style="display:none;">
+                    <pre id="log_lines" class="log_lines"></pre>
+                </div>
             </div>
 
             <form method="POST" class="cancel-button" style="margin-top:30px;">
@@ -82,6 +91,8 @@
         let end_time = {{ end_time }};
         let run_status = {{ run_status | tojson }};
         let exclusions = {{ exclusions | tojson }};
+        let notifications = [];
+        const statusDot = document.getElementById("status_dot");
         const web_app_url = "{{ web_app_url }}";
         const time_labels = ['d', 'h', 'm', 's'];
 
@@ -101,6 +112,7 @@
         exclusion_options.set("Builder Lab", ["Builder lab upgrades ENABLED", "Builder lab upgrades DISABLED"]);
         exclusion_options.set("Home Attacks", ["Home attacks ENABLED", "Home attacks DISABLED"]);
         exclusion_options.set("Builder Attacks", ["Builder attacks ENABLED", "Builder attacks DISABLED"]);
+        exclusion_options.set("Magic Items", ["Magic items (potions) ENABLED", "Magic items (potions) DISABLED"]);
 
         async function fetchExclusions() {
             try {
@@ -116,16 +128,8 @@
         async function fetchNotifications() {
             try {
                 const url = web_app_url ? `${web_app_url}/${id}/notifications` : `/${id}/notifications`;
-                const response = await fetch(url, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify(3),
-                });
-                const data = await response.json();
-                const latest_notif = (notifications.length > 0) ? notifications[0].time_stamp : 0;
-                notifications = data;
+                const response = await fetch(url);
+                notifications = await response.json();
             } catch (error) {
                 console.error('Error fetching notifications:', error);
             }
@@ -236,7 +240,7 @@
             if (!id) return;
             fetchEndTime();
             fetchStatus();
-            // fetchNotifications();
+            fetchNotifications();
             fetchExclusions();
         }
 
@@ -297,7 +301,7 @@
             }
         }
         
-        function updateLastChecked() {
+        function updateLastChecked(time_left) {
             const now = Date.now();
             let last_checked_string = "";
             if (typeof run_status === "number") {
@@ -318,12 +322,17 @@
                 last_checked_string = ``;
             }
             document.getElementById('run_status').innerText = last_checked_string;
+            statusDot.className = "status_dot";
+            if (run_status === "error") {
+                statusDot.classList.add("status_error");
+            } else if (time_left > 0) {
+                statusDot.classList.add("status_paused");
+            } else if (run_status === "now" || typeof run_status === "number") {
+                statusDot.classList.add("status_ok");
+            }
         }
 
-        function updateCountdown() {
-            const now = Date.now();
-            const total_time_left = end_time - current_time;
-            const time_left = Math.max(0, total_time_left - (now - start) / 1000);
+        function updateCountdown(time_left) {
 
             if (run_status == "error") {
                 document.getElementById('countdown_title').innerText = `Error!`;
@@ -396,10 +405,36 @@
             });
         }
 
+        let log_visible = false;
+
+        document.getElementById("log_toggle").addEventListener("click", () => {
+            log_visible = !log_visible;
+            document.getElementById("log_content").style.display = log_visible ? "block" : "none";
+            document.getElementById("log_arrow").textContent = log_visible ? "▲" : "▼";
+            if (log_visible) fetchLogs();
+        });
+
+        async function fetchLogs() {
+            if (!log_visible || !id) return;
+            try {
+                const url = web_app_url ? `${web_app_url}/${id}/logs?n=60` : `/${id}/logs?n=60`;
+                const response = await fetch(url);
+                const data = await response.json();
+                const pre = document.getElementById("log_lines");
+                pre.textContent = data.lines.join("\n");
+                pre.scrollTop = pre.scrollHeight;
+            } catch (error) {
+                console.error('Error fetching logs:', error);
+            }
+        }
+
+        setInterval(() => { if (log_visible) fetchLogs(); }, 4000);
+
         function updateAll() {
-            updateCountdown();
-            updateLastChecked();
-            // updateNotifications();
+            const time_left = Math.max(0, end_time - current_time - (Date.now() - start) / 1000);
+            updateCountdown(time_left);
+            updateLastChecked(time_left);
+            updateNotifications();
             updateExclusions();
             requestAnimationFrame(updateAll);
         }
@@ -438,7 +473,7 @@
                     fetchCurrentTime();
                     fetchEndTime();
                     fetchStatus();
-                    // fetchNotifications();
+                    fetchNotifications();
                     fetchExclusions();
                     document.getElementById("instance_id").textContent = id;
                     document.getElementById("home").style.display = "none";

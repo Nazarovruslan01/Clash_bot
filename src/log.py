@@ -31,8 +31,9 @@ def setup_logging(instance_id: str, debug: bool) -> None:
         log_dir = Path("debug")
     log_dir.mkdir(parents=True, exist_ok=True)
 
+    log_path = log_dir / f"{instance_id}.log"
     fh = RotatingFileHandler(
-        log_dir / f"{instance_id}.log",
+        log_path,
         maxBytes=5 * 1024 * 1024,  # 5 MB
         backupCount=3,
         encoding="utf-8",
@@ -40,3 +41,17 @@ def setup_logging(instance_id: str, debug: bool) -> None:
     fh.setLevel(logging.DEBUG)
     fh.setFormatter(fmt)
     logger.addHandler(fh)
+
+    try:
+        log_path.chmod(0o666)
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except Exception:
+        pass
+
+    # Log uncaught exceptions instead of silently losing them in frozen mode
+    def _excepthook(exc_type, exc_value, exc_tb):
+        logger.critical("Uncaught exception", exc_info=(exc_type, exc_value, exc_tb))
+        sys.__excepthook__(exc_type, exc_value, exc_tb)
+
+    sys.excepthook = _excepthook

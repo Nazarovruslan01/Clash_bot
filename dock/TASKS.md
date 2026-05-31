@@ -18,6 +18,7 @@ _Обновлено: 2026-05-31_
 | MINOR-1 | Debug print в `_home_lab_upgrade_once` заменён на `logger.debug` с контекстом |
 | MINOR-2 | Голые `except: pass` в lab-upgrade циклах → `except Exception as e: logger.debug(...)` |
 | FEAT-1 | Структурированное логирование: `logging` module, RotatingFileHandler (5MB, 3 backup), уровни DEBUG/INFO/WARNING/ERROR, формат `[HH:MM:SS] [INSTANCE] [LEVEL] msg` |
+| FEAT-2 | Magic Items: авто-использование Builder / Research / Training Potion; управляется через GUI (`magic_items` exclusion) |
 | ANTI-1 | Click position jitter: `_jitter()` — Gaussian noise σ=0.008, clamp [0.02, 0.98] — `click()`, `down()`, `multi_click()`, `swipe()`, `zoom()` |
 | ANTI-2 | Inter-action delay randomization: `human_delay(base, spread=0.3)` — замена ~40 `time.sleep()` вызовов |
 | ANTI-3 | CHECK_INTERVAL jitter: ±60с случайная вариация интервала проверки |
@@ -43,11 +44,19 @@ _Пока нет._
 
 ## 🟢 Следующие фичи (обсудить приоритет)
 
-### FEAT-2: Magic Items — автоматическое использование зелий
+### FEAT-6: GUI — улучшения интерфейса
 
-**Проблема:** бот не использует зелья строителей, тренировки и т.д.
+**Задачи:**
 
-**Предложение:** детектировать наличие зелий в инвентаре и применять их по правилам из `configs.py` (например, `USE_BUILDER_POTION = True`).
+1. **Уведомления** — панель уже закодирована, но закомментирована. Включить + добавить `GET /<id>/notifications` в `gui_server.py`
+2. **Magic Items тогл** — добавить переключатель `magic_items` в Task Settings (управление FEAT-2 из GUI)
+3. **Лог-вьювер** — новая секция "Logs ▼" в GUI, читает `debug/{id}.log` через `GET /<id>/logs?n=60` (новый эндпоинт)
+4. **Визуал / UX** — цветной статус-индикатор (точка: зелёная / жёлтая / красная) рядом с "Running…"
+
+**Файлы:**
+- `src/gui_server/gui_server.py` — +2 эндпоинта
+- `src/gui_server/templates/instance.html` — раскомментировать уведомления, добавить тогл, лог-вьювер, точку
+- `src/gui_server/static/styles.css` — стили для новых элементов
 
 ---
 

@@ -326,11 +326,12 @@ def get_telegram_chat_id():
 def send_notification(text):
     import requests
 
+    payload = {"data": text, "time_stamp": time.time()}
     if WEB_APP_URL != "":
         try:
             requests.post(
                 f"{WEB_APP_URL}/{INSTANCE_ID}/notify",
-                json=text,
+                json=payload,
                 timeout=(1, 2)
             )
         except (KeyboardInterrupt, SystemExit): raise
@@ -340,7 +341,7 @@ def send_notification(text):
         try:
             requests.post(
                 f"http://localhost:{port}/{INSTANCE_ID}/notify",
-                json=text,
+                json=payload,
                 timeout=(1, 2)
             )
         except (KeyboardInterrupt, SystemExit): raise

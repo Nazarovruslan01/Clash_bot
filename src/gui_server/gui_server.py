@@ -37,6 +37,7 @@ class Instance:
             "builder_attacks": not ATTACK_BUILDER_BASE,
             "lab_assistant": not ASSIGN_LAB_ASSISTANT,
             "builder_apprentice": not ASSIGN_BUILDER_ASSISTANT,
+            "magic_items": False,
         }
         self.exclusions = set(k for k, v in task_settings.items() if v)
 
@@ -140,6 +141,28 @@ def handle_notify(id):
     if data:
         instance.notifications.append(data)
     return jsonify(1)
+
+@app.route("/<id>/notifications", methods=["GET"])
+def handle_notifications(id):
+    instance = instances.get(id)
+    if not instance: abort(404)
+    return jsonify(list(instance.notifications))
+
+@app.route("/<id>/logs", methods=["GET"])
+def handle_logs(id):
+    instance = instances.get(id)
+    if not instance: abort(404)
+    n = request.args.get("n", 60, type=int)
+    if getattr(sys, "frozen", False):
+        log_path = Path.home() / ".CoC_Bot" / "debug" / f"{id}.log"
+    else:
+        log_path = Path(__file__).parent.parent / "debug" / f"{id}.log"
+    try:
+        with open(log_path, "r", encoding="utf-8") as f:
+            lines = deque(f, maxlen=n)
+    except FileNotFoundError:
+        return jsonify({"lines": []})
+    return jsonify({"lines": [l.rstrip() for l in lines]})
 
 def find_open_port():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
