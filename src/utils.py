@@ -424,8 +424,8 @@ def to_home_base():
         xys = Frame_Handler.batch_locate(scale_templates, grayscale=True, thresh=0.7, ref="cc")
         for x, y in xys:
             if x is None or y is None: continue
-            Input_Handler.click(x, y)
-            time.sleep(2)
+            Input_Handler.click(x, y, jitter=False)
+            human_delay(2.0, spread=0.2)
             return
 
 def get_home_builders(timeout=60, return_amount=True, raise_exception=True, use_cached_frame=False):
@@ -443,12 +443,12 @@ def get_home_builders(timeout=60, return_amount=True, raise_exception=True, use_
                 if raise_exception: raise Exception("No builder count found")
                 return 0 if return_amount else False
 
-            available = int(match.group()[0])
+            available = int(match.group())
             return available if return_amount else True
         except (KeyboardInterrupt, SystemExit): raise
         except Exception as e:
             if configs.DEBUG: logger.debug("get_home_builders: %s", e)
-        time.sleep(0.5)
+        human_delay(0.5, spread=0.1)
         if time.time() > start + timeout: break
     raise Exception("Failed to get home builders")
 
@@ -464,7 +464,7 @@ def start_coc(timeout=120):
         while time.time() - start < timeout:
             if not running(): return False
             safe_adb_shell(f"am start {'-S' if i==0 else ''} -W -n com.supercell.clashofclans/com.supercell.titan.GameApp", timeout=30)
-            time.sleep(25)
+            human_delay(25, spread=0.4)
             Frame_Handler.get_frame()
 
             try:
@@ -481,7 +481,7 @@ def start_coc(timeout=120):
 
             cont_x, cont_y = Frame_Handler.locate(Asset_Manager.misc_assets["continue"], grayscale=False, thresh=0.8, ref="cc", use_cached=True)
             if cont_x is not None and cont_y is not None:
-                Input_Handler.click(cont_x, cont_y)
+                Input_Handler.click(cont_x, cont_y, jitter=False)
 
             i += 1
         if time.time() - start > timeout:
@@ -553,8 +553,8 @@ def to_builder_base():
         xys = Frame_Handler.batch_locate(scale_templates, grayscale=True, thresh=0.7, ref="cc")
         for x, y in xys:
             if x is None or y is None: continue
-            Input_Handler.click(x, y)
-            time.sleep(2)
+            Input_Handler.click(x, y, jitter=False)
+            human_delay(2.0, spread=0.2)
             return
         Input_Handler.swipe(x1=0.5, y1=0.5, x2=0.25, y2=0.75, hold_end_time=100)
 
@@ -573,14 +573,27 @@ def get_builder_builders(timeout=60, return_amount=True, raise_exception=True, u
                 if raise_exception: raise Exception("No builder count found")
                 return 0 if return_amount else False
 
-            available = int(match.group()[0])
+            available = int(match.group())
             return available if return_amount else True
         except (KeyboardInterrupt, SystemExit): raise
         except Exception as e:
             if configs.DEBUG: logger.debug("get_builder_builders: %s", e)
-        time.sleep(0.5)
+        human_delay(0.5, spread=0.1)
         if time.time() > start + timeout: break
     raise Exception("Failed to get builder builders")
+
+def human_delay(base, spread=0.3):
+    """Sleep for base * uniform(1-spread, 1+spread) seconds.
+
+    Args:
+        base: Base delay in seconds.
+        spread: Fractional variation. 0.3 means actual delay is base * [0.7, 1.3].
+                Use 0.1 for short pauses (≤0.1s), 0.3 for medium, 0.4 for long.
+    """
+    import time
+    Input_Handler._ensure_rng()
+    actual = base * (1 + (2 * Input_Handler.rng.random() - 1) * spread)
+    time.sleep(max(0, actual))
 
 def require_exit(n=5, delay=0.1):
     def decorator(func):
@@ -892,10 +905,45 @@ Asset_Manager.load_magic_items_assets()
 Asset_Manager.load_fonts()
 
 class Input_Handler:
+    rng = None  # initialized by init_rng() at startup
+
     @classmethod
-    def down(cls, x, y, pointer=0):
+    def init_rng(cls, seed=None):
+        """Initialize the session RNG. Seed=None uses current time, int for reproducibility."""
+        import numpy as np, time
+        if seed is not None:
+            cls.rng = np.random.default_rng(seed)
+        else:
+            cls.rng = np.random.default_rng(int(time.time()))
+
+    @classmethod
+    def _ensure_rng(cls):
+        """Lazily initialize rng if not yet set."""
+        if cls.rng is None:
+            cls.init_rng()
+
+    PRESSURE_RANGE = (80, 120)
+
+    @classmethod
+    def _random_pressure(cls):
+        """Generate a random touch pressure within PRESSURE_RANGE."""
+        cls._ensure_rng()
+        return int(cls.rng.integers(cls.PRESSURE_RANGE[0], cls.PRESSURE_RANGE[1]))
+
+    @classmethod
+    def _jitter(cls, x, y, sigma=0.008):
+        """Apply Gaussian noise to coordinates, clamped away from screen edges."""
+        cls._ensure_rng()
+        x = max(0.02, min(0.98, x + cls.rng.normal(0, sigma)))
+        y = max(0.02, min(0.98, y + cls.rng.normal(0, sigma)))
+        return x, y
+
+    @classmethod
+    def down(cls, x, y, pointer=0, jitter=True):
         if MINITOUCH_DEVICE is None: raise RuntimeError("MINITOUCH_DEVICE is None")
         from pyminitouch import CommandBuilder
+        if jitter:
+            x, y = cls._jitter(x, y)
         if x < 0: x = 1 + x
         if y < 0: y = 1 + y
         MAX_X = int(MINITOUCH_DEVICE.connection.max_x)
@@ -903,7 +951,7 @@ class Input_Handler:
         x = int(x * MAX_X)
         y = int(y * MAX_Y)
         builder = CommandBuilder()
-        builder.down(pointer, x, y, 100)
+        builder.down(pointer, x, y, cls._random_pressure())
         builder.publish(MINITOUCH_DEVICE.connection)
 
     @classmethod
@@ -915,19 +963,22 @@ class Input_Handler:
         builder.publish(MINITOUCH_DEVICE.connection)
 
     @classmethod
-    def click(cls, x, y, n=1, delay=0, pointer=0):
+    def click(cls, x, y, n=1, delay=0, pointer=0, jitter=True):
         if MINITOUCH_DEVICE is None: raise RuntimeError("MINITOUCH_DEVICE is None")
         import time
         from pyminitouch import CommandBuilder
+        if jitter:
+            x, y = cls._jitter(x, y)
         if x < 0: x = 1 + x
         if y < 0: y = 1 + y
         MAX_X = int(MINITOUCH_DEVICE.connection.max_x)
         MAX_Y = int(MINITOUCH_DEVICE.connection.max_y)
         x = int(x * MAX_X)
         y = int(y * MAX_Y)
+        pressure = cls._random_pressure()
         builder = CommandBuilder()
         for _ in range(n):
-            builder.down(pointer, x, y, 100)
+            builder.down(pointer, x, y, pressure)
             builder.commit()
             builder.up(pointer)
             builder.publish(MINITOUCH_DEVICE.connection)
@@ -935,7 +986,7 @@ class Input_Handler:
 
     @classmethod
     def click_exit(cls, n=1, delay=0):
-        cls.click(0.02, 0.02, n, delay=delay)
+        cls.click(0.02, 0.02, n, delay=delay, jitter=False)
 
     @classmethod
     def click_back(cls, n=1, delay=0):
@@ -947,41 +998,80 @@ class Input_Handler:
     @classmethod
     def multi_click(cls, x1, y1, x2, y2, duration=0):
         if MINITOUCH_DEVICE is None: raise RuntimeError("MINITOUCH_DEVICE is None")
+        x1, y1 = cls._jitter(x1, y1)
+        x2, y2 = cls._jitter(x2, y2)
         MAX_X = int(MINITOUCH_DEVICE.connection.max_x)
         MAX_Y = int(MINITOUCH_DEVICE.connection.max_y)
         MINITOUCH_DEVICE.tap([(x1*MAX_X, y1*MAX_Y), (x2*MAX_X, y2*MAX_Y)], duration=duration)
 
     @classmethod
-    def swipe(cls, x1, y1, x2, y2, duration=100, hold_end_time=0, inter_points=0, pointer=0):
+    def swipe(cls, x1, y1, x2, y2, duration=100, hold_end_time=0, inter_points=0, pointer=0, jitter=True):
         if MINITOUCH_DEVICE is None: raise RuntimeError("MINITOUCH_DEVICE is None")
         import time, numpy as np
         from pyminitouch import CommandBuilder
-        
+
+        if jitter:
+            x1, y1 = cls._jitter(x1, y1)
+            x2, y2 = cls._jitter(x2, y2)
+
         if x1 < 0: x1 = 1 + x1
         if y1 < 0: y1 = 1 + y1
         if x2 < 0: x2 = 1 + x2
         if y2 < 0: y2 = 1 + y2
-        
+
         builder = CommandBuilder()
-        
+
         MAX_X = int(MINITOUCH_DEVICE.connection.max_x)
         MAX_Y = int(MINITOUCH_DEVICE.connection.max_y)
-        
-        x1 = int(x1 * MAX_X)
-        y1 = int(y1 * MAX_Y)
-        x2 = int(x2 * MAX_X)
-        y2 = int(y2 * MAX_Y)
-        
-        x_points = np.linspace(x1, x2, inter_points + 2, dtype=int)
-        y_points = np.linspace(y1, y2, inter_points + 2, dtype=int)
-        dt = duration / (inter_points + 1)
-        
-        builder.down(pointer, x1, y1, pressure=100)
+
+        px1 = int(x1 * MAX_X)
+        py1 = int(y1 * MAX_Y)
+        px2 = int(x2 * MAX_X)
+        py2 = int(y2 * MAX_Y)
+
+        # Generate cubic Bezier curve with random control points
+        # Perpendicular deviation scaled to screen size, not swipe distance,
+        # to avoid large horizontal wobble on long vertical scrolls
+        dx, dy = px2 - px1, py2 - py1
+        dist = max(1, (dx*dx + dy*dy) ** 0.5)
+        perp_x, perp_y = -dy / dist, dx / dist
+        max_perp = max(MAX_X, MAX_Y) * 0.03  # cap at 3% of screen size
+
+        cls._ensure_rng()
+        magnitude1 = min(cls.rng.uniform(0.05, 0.15) * dist, max_perp)
+        magnitude2 = min(cls.rng.uniform(0.05, 0.15) * dist, max_perp)
+        sign1, sign2 = cls.rng.choice([-1, 1], size=2)
+
+        cp1_x = int(px1 + dx/3 + perp_x * magnitude1 * sign1)
+        cp1_y = int(py1 + dy/3 + perp_y * magnitude1 * sign1)
+        cp2_x = int(px2 - dx/3 + perp_x * magnitude2 * sign2)
+        cp2_y = int(py2 - dy/3 + perp_y * magnitude2 * sign2)
+
+        # Bezier interpolation
+        t_vals = np.linspace(0, 1, inter_points + 2)
+        x_points = ((1-t_vals)**3 * px1 + 3*(1-t_vals)**2*t_vals * cp1_x +
+                     3*(1-t_vals)*t_vals**2 * cp2_x + t_vals**3 * px2).astype(int)
+        y_points = ((1-t_vals)**3 * py1 + 3*(1-t_vals)**2*t_vals * cp1_y +
+                     3*(1-t_vals)*t_vals**2 * cp2_y + t_vals**3 * py2).astype(int)
+
+        # Ease-in/out timing with ±10% random duration variation
+        total_duration = duration * (1 + cls.rng.uniform(-0.1, 0.1))
+        pressure = cls._random_pressure()
+
+        def ease(t):
+            return 3 * t * t - 2 * t * t * t
+
+        builder.down(pointer, px1, py1, pressure=pressure)
         builder.publish(MINITOUCH_DEVICE.connection)
-        for x, y in zip(x_points, y_points):
-            builder.move(pointer, x, y, pressure=100)
+        # Skip first point (t=0) — it's identical to the down position
+        for i, (x, y) in enumerate(x_points[1:], start=1):
+            builder.move(pointer, x, y, pressure=pressure)
             builder.publish(MINITOUCH_DEVICE.connection)
-            if dt > 0: time.sleep(dt / 1000)
+            if i < len(x_points) - 1:
+                t = (i + 1) / (len(x_points) - 1)
+                t_prev = i / (len(x_points) - 1)
+                dt = total_duration * (ease(t) - ease(t_prev))
+                if dt > 0: time.sleep(dt / 1000)
         if hold_end_time > 0: time.sleep(hold_end_time / 1000)
         builder.up(pointer)
         builder.publish(MINITOUCH_DEVICE.connection)
@@ -1011,25 +1101,66 @@ class Input_Handler:
 
         MAX_X = int(MINITOUCH_DEVICE.connection.max_x)
         MAX_Y = int(MINITOUCH_DEVICE.connection.max_y)
-        
-        left_in = to_int_array((0.15 + 0.30*percent)*MAX_X, 0.5*MAX_Y)
-        left_out = to_int_array(0.15*MAX_X, 0.5*MAX_Y)
-        right_in = to_int_array((0.85 - 0.30*percent)*MAX_X, 0.5*MAX_Y)
-        right_out = to_int_array(0.85*MAX_X, 0.5*MAX_Y)
-        
+
+        # Jitter zoom x-coordinates, share y across both fingers for horizontal pinch
+        cls._ensure_rng()
+        left_in_x, _ = cls._jitter((0.15 + 0.30*percent), 0.5)
+        left_out_x, _ = cls._jitter(0.15, 0.5)
+        right_in_x, _ = cls._jitter((0.85 - 0.30*percent), 0.5)
+        right_out_x, _ = cls._jitter(0.85, 0.5)
+        y_shared = max(0.02, min(0.98, 0.5 + cls.rng.normal(0, 0.008)))
+
+        left_in = to_int_array(left_in_x * MAX_X, y_shared * MAX_Y)
+        left_out = to_int_array(left_out_x * MAX_X, y_shared * MAX_Y)
+        right_in = to_int_array(right_in_x * MAX_X, y_shared * MAX_Y)
+        right_out = to_int_array(right_out_x * MAX_X, y_shared * MAX_Y)
+
         start = [left_in, right_in] if dir=="in" else [left_out, right_out]
         end = [left_out, right_out] if dir=="in" else [left_in, right_in]
-        
-        builder.down(0, *start[0], pressure=100)
-        builder.down(1, *start[1], pressure=100)
+
+        pressure0 = cls._random_pressure()
+        pressure1 = cls._random_pressure()
+
+        builder.down(0, *start[0], pressure=pressure0)
+        builder.down(1, *start[1], pressure=pressure1)
         builder.publish(MINITOUCH_DEVICE.connection)
-        builder.move(0, *end[0], pressure=100)
-        builder.move(1, *end[1], pressure=100)
+        builder.move(0, *end[0], pressure=pressure0)
+        builder.move(1, *end[1], pressure=pressure1)
         builder.commit()
         builder.publish(MINITOUCH_DEVICE.connection)
         builder.up(0)
         builder.up(1)
         builder.publish(MINITOUCH_DEVICE.connection)
+
+    @classmethod
+    def health_check(cls):
+        """Verify minitouch is responsive with a no-op touch at screen corner."""
+        try:
+            cls.down(0.01, 0.01, pointer=0, jitter=False)
+            cls.up(pointer=0)
+            return True
+        except Exception:
+            return False
+
+    @classmethod
+    def idle_gesture(cls):
+        """With ~30% probability, perform a short slow swipe (idle behavior)."""
+        cls._ensure_rng()
+        if cls.rng.random() > 0.3:
+            return
+        dist = cls.rng.uniform(0.02, 0.05)
+        direction = cls.rng.choice(["up", "down", "left", "right"])
+        duration = int(cls.rng.uniform(200, 400))
+        center_x = cls.rng.uniform(0.3, 0.7)
+        center_y = cls.rng.uniform(0.3, 0.7)
+        if direction == "up":
+            cls.swipe(center_x, center_y, center_x, center_y - dist, duration=duration, inter_points=3, jitter=False)
+        elif direction == "down":
+            cls.swipe(center_x, center_y, center_x, center_y + dist, duration=duration, inter_points=3, jitter=False)
+        elif direction == "left":
+            cls.swipe(center_x, center_y, center_x - dist, center_y, duration=duration, inter_points=3, jitter=False)
+        else:
+            cls.swipe(center_x, center_y, center_x + dist, center_y, duration=duration, inter_points=3, jitter=False)
 
 class Frame_Handler:
     pool = None
@@ -1067,7 +1198,7 @@ class Frame_Handler:
         else:
             if ADB_DEVICE is None: raise RuntimeError("ADB_DEVICE is None")
             frame = np.array(ADB_DEVICE.screenshot())
-            frame = cv2.resize(frame, WINDOW_DIMS, interpolation=cv2.INTER_NEAREST)
+            frame = cv2.resize(frame, ADB_WINDOW_DIMS, interpolation=cv2.INTER_NEAREST)
             with cls._frame_lock:
                 cls.cached_frame = frame.copy()
         if configs.DEBUG: cls.save_frame(frame, "debug/frame.png")

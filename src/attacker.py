@@ -16,28 +16,28 @@ class Attacker:
     def click_okay(self):
         x, y = Frame_Handler.locate(self.assets["okay"], thresh=0.9)
         if x is not None and y is not None:
-            Input_Handler.click(x, y)
+            Input_Handler.click(x, y, jitter=False)
             return True
         return False
     
     def click_surrender(self):
         x, y = Frame_Handler.locate(self.assets["surrender"], thresh=0.9)
         if x is not None and y is not None:
-            Input_Handler.click(x, y)
+            Input_Handler.click(x, y, jitter=False)
             return True
         return False
     
     def click_end_battle(self):
         x, y = Frame_Handler.locate(self.assets["end_battle"], thresh=0.9)
         if x is not None and y is not None:
-            Input_Handler.click(x, y)
+            Input_Handler.click(x, y, jitter=False)
             return True
         return False
     
     def click_return_home(self):
         x, y = Frame_Handler.locate(self.assets["return_home"], thresh=0.9)
         if x is not None and y is not None:
-            Input_Handler.click(x, y)
+            Input_Handler.click(x, y, jitter=False)
             return True
         return False
     
@@ -49,27 +49,27 @@ class Attacker:
         
         # Find a match
         for _ in range(20):
-            time.sleep(0.5)
+            human_delay(0.5)
             xys = Frame_Handler.locate(self.assets["find_a_match"], thresh=0.9, return_all=True)
             if len(xys) > 0: break
         if len(xys) == 0: return False
         xys = sorted(xys, key=lambda xy: xy[0])
         x, y = xys[0]
         if x > 0.2: return False
-        Input_Handler.click(x, y)
+        Input_Handler.click(x, y, jitter=False)
         
         # Confirm attack
         for _ in range(20):
-            time.sleep(0.5)
+            human_delay(0.5)
             x, y = Frame_Handler.locate(self.assets["confirm_attack"], thresh=0.9)
             if x is not None and y is not None: break
         if x is None or y is None: return False
-        Input_Handler.click(x, y)
+        Input_Handler.click(x, y, jitter=False)
         
         # Wait until "end battle" button is found
         start_time = time.time()
         while time.time() - start_time < timeout:
-            time.sleep(0.5)
+            human_delay(0.5)
             x, y = Frame_Handler.locate(self.assets["end_battle"], thresh=0.9)
             if x is not None and y is not None: return True
         return False
@@ -82,16 +82,16 @@ class Attacker:
         
         # Find a match
         for _ in range(20):
-            time.sleep(0.5)
+            human_delay(0.5)
             x, y = Frame_Handler.locate(self.assets["find_now"], thresh=0.9)
             if x is not None and y is not None: break
         if x is None or y is None: return False
-        Input_Handler.click(x, y)
+        Input_Handler.click(x, y, jitter=False)
         
         # Wait until "battle starts in" test is found
         start_time = time.time()
         while time.time() - start_time < timeout:
-            time.sleep(0.5)
+            human_delay(0.5)
             section = Frame_Handler.get_frame_section(0, 0, 1, 0.1, grayscale=True, high_contrast=True, thresh=150)
             x, y = Frame_Handler.locate(self.assets["battle_starts_in"], section, thresh=0.9)
             if x is not None and y is not None: return True
@@ -209,43 +209,48 @@ class Attacker:
     
     def deploy_troops(self, card_centers, available_slots=None, card_types=None, card_counts=None):
         import time, numpy as np
-        
+
         def card_gray(card_center):
             section = Frame_Handler.get_frame_section(card_center-0.01, 0.89, card_center+0.01, 0.91, grayscale=False)
             return np.all(section[:, :, 0] == section[:, :, 1]) and np.all(section[:, :, 1] == section[:, :, 2])
-        
+
         if available_slots is None: available_slots = [1] * len(card_centers)
         if card_types is None: card_types = [None] * len(card_centers)
         if card_counts is None: card_counts = [0] * len(card_centers)
-        
+
+        # Per-attack random deployment center
+        Input_Handler._ensure_rng()
+        deploy_x = Input_Handler.rng.uniform(0.35, 0.65)
+        deploy_y = Input_Handler.rng.uniform(0.70, 0.85)
+
         # Start holding deploy position w/ secondary touch pointer
-        Input_Handler.down(0.5, 0.8, pointer=1)
-        
+        Input_Handler.down(deploy_x, deploy_y, pointer=1)
+
         for i in range(len(card_centers)):
             if available_slots[i]:
                 # Select slot
                 Input_Handler.click(card_centers[i], 0.9)
-                
+
                 # Deploy selected slot
                 if card_types[i] in ["hero", "clan"]:
-                    Input_Handler.click(0.5, 0.8)
+                    Input_Handler.click(deploy_x, deploy_y)
                 elif card_types[i] == "troop":
-                    Input_Handler.down(0.5, 0.8, pointer=0)
+                    Input_Handler.down(deploy_x, deploy_y, pointer=0)
                     end_time = time.monotonic() + TROOP_DEPLOY_TIME
                     while time.monotonic() < end_time and not card_gray(card_centers[i]): time.sleep(0.01)
                     Input_Handler.up(pointer=0)
                 elif card_types[i] == "spell":
                     n = card_counts[i]
-                    rxs = np.random.uniform(0.35, 0.65, n)
-                    rys = np.random.uniform(0.45, 0.55, n)
+                    rxs = Input_Handler.rng.uniform(0.35, 0.65, n)
+                    rys = Input_Handler.rng.uniform(0.45, 0.55, n)
                     for coord in zip(rxs, rys):
-                        Input_Handler.click(*coord)
+                        Input_Handler.click(*coord, jitter=False)
                 else:
-                    Input_Handler.click(0.5, 0.8, n=max(0, card_counts[i]))
-        
+                    Input_Handler.click(deploy_x, deploy_y, n=max(0, card_counts[i]))
+
         # Release secondary pointer
         Input_Handler.up(pointer=1)
-        
+
         # Unselect last card
         Input_Handler.click(0.01, 0.9)
     
@@ -282,7 +287,7 @@ class Attacker:
             # Scroll over and look for the new position of the last card
             last_card_frame = frame[:, int(card_boundaries[-2] * frame.shape[1]):int(card_boundaries[-1] * frame.shape[1])]
             Input_Handler.swipe_left(x1=card_centers[-1], x2=0.038, y=0.9, hold_end_time=500)
-            time.sleep(0.5)
+            human_delay(0.5)
             frame = Frame_Handler.get_frame_section(0.0, 0.82, 1.0, 1.0, grayscale=False)
             last_card_left = Frame_Handler.locate(last_card_frame, frame, thresh=0.9, grayscale=False, ref="lc")[0]
             # If the card didn't move then there are no more troops so it can be deployed
@@ -300,13 +305,14 @@ class Attacker:
     
     def complete_builder_attack(self, restart=True):
         import numpy as np
-        
+
+        Input_Handler._ensure_rng()
         Input_Handler.zoom(dir="out")
         Input_Handler.swipe_up()
-        
-        card_centers = np.linspace(0.1, 0.9, 11)
+
+        card_centers = Input_Handler.rng.uniform(-0.02, 0.02, 11) + np.linspace(0.1, 0.9, 11)
         self.deploy_troops(card_centers, card_counts=[4]*len(card_centers))
-        
+
         # Close and reopen CoC to auto complete battle
         if restart:
             start_coc()
