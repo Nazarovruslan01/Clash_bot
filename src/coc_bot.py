@@ -207,6 +207,7 @@ class CoC_Bot:
                     self.update_status(time.time())
 
                 _err_count = 0
+                Input_Handler._ensure_rng()
                 jitter = int(Input_Handler.rng.integers(-CHECK_INTERVAL_JITTER, CHECK_INTERVAL_JITTER + 1))
                 time.sleep(max(0, CHECK_INTERVAL + jitter))
 

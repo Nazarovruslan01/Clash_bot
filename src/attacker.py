@@ -16,28 +16,28 @@ class Attacker:
     def click_okay(self):
         x, y = Frame_Handler.locate(self.assets["okay"], thresh=0.9)
         if x is not None and y is not None:
-            Input_Handler.click(x, y)
+            Input_Handler.click(x, y, jitter=False)
             return True
         return False
     
     def click_surrender(self):
         x, y = Frame_Handler.locate(self.assets["surrender"], thresh=0.9)
         if x is not None and y is not None:
-            Input_Handler.click(x, y)
+            Input_Handler.click(x, y, jitter=False)
             return True
         return False
     
     def click_end_battle(self):
         x, y = Frame_Handler.locate(self.assets["end_battle"], thresh=0.9)
         if x is not None and y is not None:
-            Input_Handler.click(x, y)
+            Input_Handler.click(x, y, jitter=False)
             return True
         return False
     
     def click_return_home(self):
         x, y = Frame_Handler.locate(self.assets["return_home"], thresh=0.9)
         if x is not None and y is not None:
-            Input_Handler.click(x, y)
+            Input_Handler.click(x, y, jitter=False)
             return True
         return False
     
@@ -56,7 +56,7 @@ class Attacker:
         xys = sorted(xys, key=lambda xy: xy[0])
         x, y = xys[0]
         if x > 0.2: return False
-        Input_Handler.click(x, y)
+        Input_Handler.click(x, y, jitter=False)
         
         # Confirm attack
         for _ in range(20):
@@ -64,7 +64,7 @@ class Attacker:
             x, y = Frame_Handler.locate(self.assets["confirm_attack"], thresh=0.9)
             if x is not None and y is not None: break
         if x is None or y is None: return False
-        Input_Handler.click(x, y)
+        Input_Handler.click(x, y, jitter=False)
         
         # Wait until "end battle" button is found
         start_time = time.time()
@@ -86,7 +86,7 @@ class Attacker:
             x, y = Frame_Handler.locate(self.assets["find_now"], thresh=0.9)
             if x is not None and y is not None: break
         if x is None or y is None: return False
-        Input_Handler.click(x, y)
+        Input_Handler.click(x, y, jitter=False)
         
         # Wait until "battle starts in" test is found
         start_time = time.time()
@@ -244,7 +244,7 @@ class Attacker:
                     rxs = Input_Handler.rng.uniform(0.35, 0.65, n)
                     rys = Input_Handler.rng.uniform(0.45, 0.55, n)
                     for coord in zip(rxs, rys):
-                        Input_Handler.click(*coord)
+                        Input_Handler.click(*coord, jitter=False)
                 else:
                     Input_Handler.click(deploy_x, deploy_y, n=max(0, card_counts[i]))
 

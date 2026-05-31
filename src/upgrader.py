@@ -59,7 +59,7 @@ class Upgrader:
                 thresh=0.85, grayscale=False
             )
             if x is None or y is None: return False
-            Input_Handler.click(x, y)
+            Input_Handler.click(x, y, jitter=False)
             human_delay(1.0)
             return True
         except (KeyboardInterrupt, SystemExit): raise
@@ -84,7 +84,7 @@ class Upgrader:
                 logger.debug("_use_potion: %s not found on screen", potion_key)
                 Input_Handler.click_back()
                 return False
-            Input_Handler.click(x, y)
+            Input_Handler.click(x, y, jitter=False)
             human_delay(0.5)
 
             x, y = Frame_Handler.locate(
@@ -94,7 +94,7 @@ class Upgrader:
             if x is None or y is None:
                 Input_Handler.click_back()
                 return False
-            Input_Handler.click(x, y)
+            Input_Handler.click(x, y, jitter=False)
             human_delay(0.5)
 
             Input_Handler.click_back()
@@ -219,7 +219,7 @@ class Upgrader:
         # Collect elixir
         x, y = Frame_Handler.locate(self.assets["collect"], grayscale=False, thresh=0.9)
         if x is not None and y is not None:
-            Input_Handler.click(x, y)
+            Input_Handler.click(x, y, jitter=False)
             human_delay(0.1, spread=0.1)
         Input_Handler.click_back(3, 0.1)
 
@@ -401,6 +401,7 @@ class Upgrader:
     
     @require_exit()
     def _home_upgrade_once(self, upgrade_text=None, exclude_heroes=False):
+        Input_Handler._ensure_rng()
         try:
             result = self._open_upgrade_menu(self._click_home_builders)
             if result is None: return None
@@ -542,6 +543,7 @@ class Upgrader:
     
     @require_exit()
     def _home_lab_upgrade_once(self, upgrade_text=None):
+        Input_Handler._ensure_rng()
         try:
             result = self._open_upgrade_menu(self._click_home_lab)
             if result is None: return None
@@ -638,6 +640,7 @@ class Upgrader:
     
     @require_exit()
     def _builder_upgrade_once(self, upgrade_text=None):
+        Input_Handler._ensure_rng()
         try:
             result = self._open_upgrade_menu(self._click_builder_builders)
             if result is None: return None
@@ -699,6 +702,7 @@ class Upgrader:
     
     @require_exit()
     def _builder_lab_upgrade_once(self, upgrade_text=None):
+        Input_Handler._ensure_rng()
         try:
             result = self._open_upgrade_menu(self._click_builder_lab)
             if result is None: return None
