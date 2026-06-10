@@ -225,31 +225,31 @@ class Attacker:
 
         # Start holding deploy position w/ secondary touch pointer
         Input_Handler.down(deploy_x, deploy_y, pointer=1)
+        try:
+            for i in range(len(card_centers)):
+                if available_slots[i]:
+                    # Select slot
+                    Input_Handler.click(card_centers[i], 0.9)
 
-        for i in range(len(card_centers)):
-            if available_slots[i]:
-                # Select slot
-                Input_Handler.click(card_centers[i], 0.9)
-
-                # Deploy selected slot
-                if card_types[i] in ["hero", "clan"]:
-                    Input_Handler.click(deploy_x, deploy_y)
-                elif card_types[i] == "troop":
-                    Input_Handler.down(deploy_x, deploy_y, pointer=0)
-                    end_time = time.monotonic() + TROOP_DEPLOY_TIME
-                    while time.monotonic() < end_time and not card_gray(card_centers[i]): time.sleep(0.01)
-                    Input_Handler.up(pointer=0)
-                elif card_types[i] == "spell":
-                    n = card_counts[i]
-                    rxs = Input_Handler.rng.uniform(0.35, 0.65, n)
-                    rys = Input_Handler.rng.uniform(0.45, 0.55, n)
-                    for coord in zip(rxs, rys):
-                        Input_Handler.click(*coord, jitter=False)
-                else:
-                    Input_Handler.click(deploy_x, deploy_y, n=max(0, card_counts[i]))
-
-        # Release secondary pointer
-        Input_Handler.up(pointer=1)
+                    # Deploy selected slot
+                    if card_types[i] in ["hero", "clan"]:
+                        Input_Handler.click(deploy_x, deploy_y)
+                    elif card_types[i] == "troop":
+                        Input_Handler.down(deploy_x, deploy_y, pointer=0)
+                        end_time = time.monotonic() + TROOP_DEPLOY_TIME
+                        while time.monotonic() < end_time and not card_gray(card_centers[i]): time.sleep(0.01)
+                        Input_Handler.up(pointer=0)
+                    elif card_types[i] == "spell":
+                        n = card_counts[i]
+                        rxs = Input_Handler.rng.uniform(0.35, 0.65, n)
+                        rys = Input_Handler.rng.uniform(0.45, 0.55, n)
+                        for coord in zip(rxs, rys):
+                            Input_Handler.click(*coord, jitter=False)
+                    else:
+                        Input_Handler.click(deploy_x, deploy_y, n=max(0, card_counts[i]))
+        finally:
+            # Release secondary pointer
+            Input_Handler.up(pointer=1)
 
         # Unselect last card
         Input_Handler.click(0.01, 0.9)

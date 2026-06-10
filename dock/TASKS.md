@@ -33,6 +33,7 @@ _Обновлено: 2026-05-31_
 | ANTI-12 | Session RNG seed: `Input_Handler.init_rng()` — воспроизводимое поведение через `SESSION_SEED` |
 | ANTI-13 | Idle gestures: `idle_gesture()` — ~30% шанс micro-scroll между фазами |
 | ANTI-14 | Screen edge avoidance: `_jitter()` clamp [0.02, 0.98] — автоматическое избежание краёв |
+| FEAT-6 | GUI улучшения: уведомления (`GET /<id>/notifications`), Magic Items тогл, лог-вьювер (`GET /<id>/logs?n=60`), цветной статус-индикатор |
 
 ---
 
@@ -43,22 +44,6 @@ _Пока нет._
 ---
 
 ## 🟢 Следующие фичи (обсудить приоритет)
-
-### FEAT-6: GUI — улучшения интерфейса
-
-**Задачи:**
-
-1. **Уведомления** — панель уже закодирована, но закомментирована. Включить + добавить `GET /<id>/notifications` в `gui_server.py`
-2. **Magic Items тогл** — добавить переключатель `magic_items` в Task Settings (управление FEAT-2 из GUI)
-3. **Лог-вьювер** — новая секция "Logs ▼" в GUI, читает `debug/{id}.log` через `GET /<id>/logs?n=60` (новый эндпоинт)
-4. **Визуал / UX** — цветной статус-индикатор (точка: зелёная / жёлтая / красная) рядом с "Running…"
-
-**Файлы:**
-- `src/gui_server/gui_server.py` — +2 эндпоинта
-- `src/gui_server/templates/instance.html` — раскомментировать уведомления, добавить тогл, лог-вьювер, точку
-- `src/gui_server/static/styles.css` — стили для новых элементов
-
----
 
 ### FEAT-3: Clan Games — автозавершение заданий
 

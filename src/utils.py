@@ -396,13 +396,13 @@ def extend_pythonanywhere_hosting(username, password):
 
 def to_home_base():
     import cv2, time, numpy as np
-    
+
     try:
         get_home_builders(1)
         return
     except (KeyboardInterrupt, SystemExit): raise
     except: pass
-    
+
     Input_Handler.zoom(dir="out")
     for _ in range(3):
         Input_Handler.swipe_up(
@@ -414,12 +414,12 @@ def to_home_base():
             x1=1.0,
             x2=0.0,
         )
-    
+
     scale_templates = []
     for scale in np.arange(0.43, 0.47, 0.01):
         template = cv2.resize(Asset_Manager.misc_assets["boat_icon"], None, fx=scale, fy=scale, interpolation=cv2.INTER_NEAREST)
         scale_templates.append(template)
-    
+
     for _ in range(5):
         xys = Frame_Handler.batch_locate(scale_templates, grayscale=True, thresh=0.7, ref="cc")
         for x, y in xys:
@@ -427,6 +427,7 @@ def to_home_base():
             Input_Handler.click(x, y, jitter=False)
             human_delay(2.0, spread=0.2)
             return
+    raise Exception("Failed to navigate to home base")
 
 def get_home_builders(timeout=60, return_amount=True, raise_exception=True, use_cached_frame=False):
     import time, cv2, re
@@ -434,16 +435,16 @@ def get_home_builders(timeout=60, return_amount=True, raise_exception=True, use_
     start = time.time()
     while True:
         try:
-            section = Frame_Handler.get_frame_section(0.43, 0.03, 0.53, 0.09, high_contrast=True, use_cached=use_cached_frame)
+            section = Frame_Handler.get_frame_section(0.32, 0.01, 0.52, 0.08, grayscale=False, use_cached=use_cached_frame)
             if configs.DEBUG: Frame_Handler.save_frame(section, "debug/home_builders.png")
 
-            text = fix_digits(''.join(OCR_Handler.get_text(section)).replace(' ', '').replace('/', ''))
-            match = re.search(r'\d+', text)
+            raw = ''.join(OCR_Handler.get_text(section)).replace(' ', '')
+            match = re.search(r'(\d+)[/|Il](\d+)', raw) or re.search(r'\d+', fix_digits(raw))
             if not match:
                 if raise_exception: raise Exception("No builder count found")
                 return 0 if return_amount else False
 
-            available = int(match.group())
+            available = int(fix_digits(match.group(1))) if match.lastindex else int(fix_digits(match.group()))
             return available if return_amount else True
         except (KeyboardInterrupt, SystemExit): raise
         except Exception as e:
@@ -529,13 +530,13 @@ def update_coc(timeout=10):
 
 def to_builder_base():
     import cv2, time, numpy as np
-    
+
     try:
         get_builder_builders(1)
         return
     except (KeyboardInterrupt, SystemExit): raise
     except: pass
-    
+
     for _ in range(3):
         Input_Handler.zoom(dir="in")
     for _ in range(2):
@@ -543,12 +544,12 @@ def to_builder_base():
     for _ in range(3):
         Input_Handler.swipe_right()
         Input_Handler.swipe_up()
-    
+
     scale_templates = []
     for scale in np.arange(0.43, 0.47, 0.01):
         template = cv2.resize(Asset_Manager.misc_assets["boat_icon"], None, fx=scale, fy=scale, interpolation=cv2.INTER_NEAREST)
         scale_templates.append(template)
-    
+
     for _ in range(5):
         xys = Frame_Handler.batch_locate(scale_templates, grayscale=True, thresh=0.7, ref="cc")
         for x, y in xys:
@@ -557,6 +558,7 @@ def to_builder_base():
             human_delay(2.0, spread=0.2)
             return
         Input_Handler.swipe(x1=0.5, y1=0.5, x2=0.25, y2=0.75, hold_end_time=100)
+    raise Exception("Failed to navigate to builder base")
 
 def get_builder_builders(timeout=60, return_amount=True, raise_exception=True, use_cached_frame=False):
     import time, cv2, re
@@ -564,16 +566,16 @@ def get_builder_builders(timeout=60, return_amount=True, raise_exception=True, u
     start = time.time()
     while True:
         try:
-            section = Frame_Handler.get_frame_section(0.56, 0.03, 0.66, 0.09, high_contrast=True, use_cached=use_cached_frame)
+            section = Frame_Handler.get_frame_section(0.05, 0.01, 0.55, 0.08, grayscale=False, use_cached=use_cached_frame)
             if configs.DEBUG: Frame_Handler.save_frame(section, "debug/builder_builders.png")
 
-            text = fix_digits(''.join(OCR_Handler.get_text(section)).replace(' ', '').replace('/', ''))
-            match = re.search(r'\d+', text)
+            raw = ''.join(OCR_Handler.get_text(section)).replace(' ', '')
+            match = re.search(r'(\d+)[/|Il](\d+)', raw) or re.search(r'\d+', fix_digits(raw))
             if not match:
                 if raise_exception: raise Exception("No builder count found")
                 return 0 if return_amount else False
 
-            available = int(match.group())
+            available = int(fix_digits(match.group(1))) if match.lastindex else int(fix_digits(match.group()))
             return available if return_amount else True
         except (KeyboardInterrupt, SystemExit): raise
         except Exception as e:
@@ -785,13 +787,14 @@ class Task_Handler:
             return not (configs.USE_BUILDER_POTION or configs.USE_RESEARCH_POTION or configs.USE_TRAINING_POTION)
 
 class OCR_Handler:
-    
+
     backoff_time = 0
-    
+    _model = None
+
     @classmethod
     def get_text(cls, frame):
         import time
-        if configs.GROQ_API_KEY != "":
+        if configs.GEMINI_API_KEY != "":
             if time.time() > cls.backoff_time:
                 try: return cls.external_ocr(frame)
                 except (KeyboardInterrupt, SystemExit): raise
@@ -808,29 +811,24 @@ class OCR_Handler:
 
     @classmethod
     def external_ocr(cls, frame):
-        import cv2, base64
-        from groq import Groq
-        
-        base64_img = base64.b64encode(cv2.imencode(".jpg", frame)[1]).decode("utf-8")
-        client = Groq(api_key=configs.GROQ_API_KEY, timeout=10, max_retries=0)
-        chat_completion = client.chat.completions.create(
-            model="meta-llama/llama-4-scout-17b-16e-instruct",
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "what text is in this image? respond ONLY with the text. if there is no text respond with ~"},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpg;base64,{base64_img}",
-                            },
-                        },
-                    ],
-                }
-            ],
+        import cv2
+        import PIL.Image
+        from google import genai
+        from google.genai import types
+
+        if cls._model is None:
+            cls._model = genai.Client(api_key=configs.GEMINI_API_KEY)
+
+        img = PIL.Image.fromarray(frame)
+        response = cls._model.models.generate_content(
+            model=configs.GEMINI_MODEL,
+            contents=["what text is in this image? respond ONLY with the text. if there is no text respond with ~", img],
+            config=types.GenerateContentConfig(
+                max_output_tokens=32,
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
+            ),
         )
-        return chat_completion.choices[0].message.content.replace('~', '').splitlines()
+        return (response.text or '').replace('~', '').splitlines()
 
 class Asset_Manager:
     fonts = {}
@@ -1064,7 +1062,7 @@ class Input_Handler:
         builder.down(pointer, px1, py1, pressure=pressure)
         builder.publish(MINITOUCH_DEVICE.connection)
         # Skip first point (t=0) — it's identical to the down position
-        for i, (x, y) in enumerate(x_points[1:], start=1):
+        for i, (x, y) in enumerate(zip(x_points[1:], y_points[1:]), start=1):
             builder.move(pointer, x, y, pressure=pressure)
             builder.publish(MINITOUCH_DEVICE.connection)
             if i < len(x_points) - 1:

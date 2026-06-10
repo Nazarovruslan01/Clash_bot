@@ -30,14 +30,16 @@ class Upgrader:
     # ============================================================
     
     def _click_home_builders(self):
-        Input_Handler.click(0.5, 0.05)
-    
+        # TH17 top bar: home builders button at center-left of upgrade menu header
+        Input_Handler.click(0.42, 0.05)
+
     def _click_home_lab(self):
-        Input_Handler.click(0.4, 0.05)
+        # TH17 top bar: home lab button slightly left of builders button
+        Input_Handler.click(0.41, 0.05)
 
     def _click_builder_builders(self):
         Input_Handler.click(0.6, 0.05)
-    
+
     def _click_builder_lab(self):
         Input_Handler.click(0.45, 0.05)
 
@@ -115,54 +117,14 @@ class Upgrader:
     # ============================================================
 
     def home_lab_available(self, timeout=60):
-        import time, cv2
-        
-        start = time.time()
-        while time.time() < start + timeout:
-            try:
-                section = Frame_Handler.get_frame_section(0.368, 0.04, -0.59, 0.08, high_contrast=True)
-                if configs.DEBUG: Frame_Handler.save_frame(section, "debug/home_lab.png")
-                
-                # Find the backslash
-                slash = cv2.cvtColor(self.assets["slash"], cv2.COLOR_RGB2GRAY)
-                res = cv2.matchTemplate(section, slash, cv2.TM_CCOEFF_NORMED)
-                _, max_val, _, _ = cv2.minMaxLoc(res)
-                if max_val < 0.9: continue
-                
-                # Extract text
-                text = fix_digits(''.join(OCR_Handler.get_text(section)).replace(' ', '').replace('/', ''))
-                available = int(text[0])
-                return available > 0
-            except (KeyboardInterrupt, SystemExit): raise
-            except Exception as e:
-                if configs.DEBUG: logger.debug("home_lab_available: %s", e)
-            human_delay(0.5)
-        raise Exception("Failed to get home lab availability")
+        # TH17 top bar has no lab indicator — availability is now detected during upgrade attempt.
+        # Always returns True to allow upgrade_attempt to handle lab-busy cases.
+        # Callers should handle lab exhaustion in home_lab_upgrade() result instead.
+        return True
 
     def builder_lab_available(self, timeout=60):
-        import time, cv2
-        
-        start = time.time()
-        while time.time() < start + timeout:
-            try:
-                section = Frame_Handler.get_frame_section(0.448, 0.04, -0.515, 0.08, high_contrast=True)
-                if configs.DEBUG: Frame_Handler.save_frame(section, "debug/builder_lab.png")
-                
-                # Find the backslash
-                slash = cv2.cvtColor(self.assets["slash"], cv2.COLOR_RGB2GRAY)
-                res = cv2.matchTemplate(section, slash, cv2.TM_CCOEFF_NORMED)
-                _, max_val, _, _ = cv2.minMaxLoc(res)
-                if max_val < 0.9: continue
-                
-                # Extract text
-                text = fix_digits(''.join(OCR_Handler.get_text(section)).replace(' ', '').replace('/', ''))
-                available = int(text[0])
-                return available > 0
-            except (KeyboardInterrupt, SystemExit): raise
-            except Exception as e:
-                if configs.DEBUG: logger.debug("builder_lab_available: %s", e)
-            human_delay(0.5)
-        raise Exception("Failed to get builder lab availability")
+        # Builder base top bar has no lab indicator — let the upgrade attempt detect if lab is busy
+        return True
 
     def collect_resources(self):
         import time, numpy as np
@@ -318,11 +280,17 @@ class Upgrader:
         Returns (x_sug, y_sug, sug_template, menu_left, menu_top, menu_right,
                  menu_bottom, menu_center) or None if the header is not found.
         """
-        click_fn()
-        human_delay(0.5)
         sug_template, sug_width, _ = self._get_suggested_upgrade_template()
+        # Check if panel is already open — clicking an open panel toggles it closed
         x_sug, y_sug = Frame_Handler.locate(sug_template, thresh=0.70, grayscale=False)
         if x_sug is None or y_sug is None:
+            click_fn()
+            human_delay(0.5)
+            x_sug, y_sug = Frame_Handler.locate(sug_template, thresh=0.70, grayscale=False)
+        if x_sug is None or y_sug is None:
+            if configs.DEBUG:
+                Frame_Handler.save_frame(Frame_Handler.get_frame(grayscale=False, use_cached=True), "debug/upgrade_menu_fail.png")
+                logger.debug("_open_upgrade_menu: failed to locate upgrade menu header after click attempt")
             return None
         frame = Frame_Handler.get_frame(grayscale=False, use_cached=True)
         _, menu_left, menu_top, menu_right, menu_bottom = self._get_upgrade_menu(
@@ -427,6 +395,7 @@ class Upgrader:
                 Input_Handler.click(x_sug, y)
             else:
                 menu = Frame_Handler.get_frame_section(menu_left, menu_top, menu_right, menu_bottom, grayscale=False)
+                if configs.DEBUG: Frame_Handler.save_frame(menu, "debug/home_upgrade_menu.png")
                 frame = Frame_Handler.get_frame(grayscale=False, use_cached=True)
                 potential_y_locs = self._get_potential_upgrade_locs(menu)
                 if configs.DEBUG: logger.debug("_home_upgrade_once: %d potential random upgrade rows", len(potential_y_locs))
@@ -463,8 +432,12 @@ class Upgrader:
             if in_hero_hall:
                 if Task_Handler.heroes_excluded(): return None
             else:
-                self._click_home_builders()
-                human_delay(0.5)
+                # Guard: don't click if upgrade panel is still open (would toggle-close it)
+                sug_template, _, _ = self._get_suggested_upgrade_template()
+                x_sug, y_sug = Frame_Handler.locate(sug_template, thresh=0.70, grayscale=False)
+                if x_sug is None or y_sug is None:
+                    self._click_home_builders()
+                    human_delay(0.5)
                 x, y = Frame_Handler.locate(self.assets["upgrade"], thresh=0.90, grayscale=False)
                 if x is None or y is None:
                     if configs.DEBUG: logger.debug("_home_upgrade_once: upgrade button not found after selecting building")
@@ -482,7 +455,9 @@ class Upgrader:
             if not text_list:
                 if configs.DEBUG: logger.debug("_home_upgrade_once: OCR returned empty text for upgrade name")
                 return None
-            upgrade_name = spell_check(re.sub(r"\s*x\d+$", "", text_list[0].lower()[:-3]))
+            raw = text_list[0].lower()
+            raw = raw[:-3].strip() if len(raw) > 3 else raw
+            upgrade_name = spell_check(re.sub(r"\s*x\d+$", "", raw))
 
             x, y = Frame_Handler.locate(self.assets["confirm"], grayscale=False, thresh=0.85, use_cached=True)
             if x is None or y is None:
@@ -524,7 +499,7 @@ class Upgrader:
             
             # Find assign assistant label
             xys = Frame_Handler.locate(self.assets["assign_assistant"], thresh=0.9, grayscale=False, return_all=True)
-            if xys is None: return
+            if not xys: return
             
             x, y = sorted(xys, key=lambda pair: pair[1])[0]
             
@@ -578,7 +553,9 @@ class Upgrader:
             if configs.DEBUG: Frame_Handler.save_frame(section, "debug/lab_upgrade_name.png")
             text_list = OCR_Handler.get_text(section)
             if not text_list: return None
-            upgrade_name = spell_check(re.sub(r"\s*x\d+$", "", text_list[0].lower()[:-3]))
+            raw = text_list[0].lower()
+            raw = raw[:-3].strip() if len(raw) > 3 else raw
+            upgrade_name = spell_check(re.sub(r"\s*x\d+$", "", raw))
 
             x, y = Frame_Handler.locate(self.assets["confirm"], grayscale=False, thresh=0.85, use_cached=True)
             if x is None or y is None: return None
@@ -621,7 +598,7 @@ class Upgrader:
             
             # Find assign assistant label
             xys = Frame_Handler.locate(self.assets["assign_assistant"], thresh=0.9, grayscale=False, return_all=True)
-            if xys is None: return
+            if not xys: return
             
             x, y = sorted(xys, key=lambda pair: pair[1])[0]
             
@@ -674,8 +651,12 @@ class Upgrader:
                 Input_Handler.click(x_upgrade, y_upgrade)
 
             human_delay(0.5)
-            self._click_builder_builders()
-            human_delay(0.5)
+            # Guard: don't click if upgrade panel is still open (would toggle-close it)
+            sug_template, _, _ = self._get_suggested_upgrade_template()
+            x_sug, y_sug = Frame_Handler.locate(sug_template, thresh=0.70, grayscale=False)
+            if x_sug is None or y_sug is None:
+                self._click_builder_builders()
+                human_delay(0.5)
 
             x, y = Frame_Handler.locate(self.assets["upgrade"], thresh=0.90, grayscale=False)
             if x is None or y is None: return None
@@ -816,8 +797,7 @@ class Upgrader:
             if lab_available:
                 upgraded = self.home_lab_upgrade()
                 human_delay(0.5)
-                final_lab_avail = self.home_lab_available(1)
-                if upgraded is not None and not final_lab_avail: lab_upgrades_started.append(upgraded.lower())
+                if upgraded is not None: lab_upgrades_started.append(upgraded.lower())
         except (KeyboardInterrupt, SystemExit): raise
         except Exception as e:
             if configs.DEBUG: logger.debug("run_home_base lab upgrade: %s", e)
@@ -879,8 +859,7 @@ class Upgrader:
             if not exclude_lab and self.builder_lab_available(1):
                 upgraded = self.builder_lab_upgrade()
                 human_delay(0.5)
-                final_lab_avail = self.builder_lab_available(1)
-                if upgraded is not None and not final_lab_avail: lab_upgrades_started.append(upgraded.lower())
+                if upgraded is not None: lab_upgrades_started.append(upgraded.lower())
         except (KeyboardInterrupt, SystemExit): raise
         except Exception as e:
             if configs.DEBUG: logger.debug("run_builder_base lab upgrade: %s", e)
