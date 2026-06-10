@@ -10,6 +10,7 @@ debug
 *.spec
 src/cache.json
 src/configs.py
+src/.env
 scripts/start.sh
 app/data
 app/coc_bot_web_app.service

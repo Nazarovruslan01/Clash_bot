@@ -2,11 +2,21 @@ import logging
 import time
 import re
 import numpy as np
+from dataclasses import dataclass
 from utils import *
 import configs
 from configs import *
 
 logger = logging.getLogger("coc_bot")
+
+@dataclass
+class Resources:
+    """Represents current resource counts on home base."""
+    gold: int = 0
+    elixir: int = 0
+    dark_elixir: int = 0
+    builder_gold: int = 0
+    builder_elixir: int = 0
 
 class Upgrader:
 
@@ -24,6 +34,46 @@ class Upgrader:
     
     def __init__(self):
         self.assets = Asset_Manager.upgrader_assets
+        self.last_failed_upgrades: dict[str, float] = {}  # Track recently failed upgrades to avoid retrying too soon
+
+    def get_home_resources(self) -> Resources:
+        """Read current resource amounts from home base UI."""
+        try:
+            # Get the top bar area where resources are displayed
+            frame = Frame_Handler.get_frame(grayscale=False)
+            # Resource bar is typically at the top, roughly y: 0-80px
+            resource_section = frame[0:80, :, :]
+            
+            text_lines = OCR_Handler.get_text(resource_section)
+            all_text = " ".join(text_lines)
+            
+            resources = Resources()
+            
+            # Extract numbers using fix_digits and regex
+            # Pattern: "number" representing resources
+            number_pattern = r'\d+'
+            numbers = [int(match) for match in re.findall(number_pattern, all_text)]
+            
+            # Typically resources appear in order: Gold, Elixir, Dark Elixir (or similar)
+            # This is a best-effort extraction that depends on OCR quality
+            if len(numbers) >= 1:
+                resources.gold = numbers[0]
+            if len(numbers) >= 2:
+                resources.elixir = numbers[1]
+            if len(numbers) >= 3:
+                resources.dark_elixir = numbers[2]
+            if len(numbers) >= 4:
+                resources.builder_gold = numbers[3]
+            if len(numbers) >= 5:
+                resources.builder_elixir = numbers[4]
+            
+            return resources
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except Exception as e:
+            if configs.DEBUG:
+                logger.debug("get_home_resources: %s", e)
+            return Resources()
 
     # ============================================================
     # 📱 Screen Interaction
@@ -370,6 +420,18 @@ class Upgrader:
     @require_exit()
     def _home_upgrade_once(self, upgrade_text=None, exclude_heroes=False):
         Input_Handler._ensure_rng()
+
+        # Check resources if configured
+        if configs.USE_RESOURCE_CHECK:
+            resources = self.get_home_resources()
+            min_total = configs.MIN_LOOT_GOLD + configs.MIN_LOOT_ELIXIR + configs.MIN_LOOT_DARK_ELIXIR
+            current_total = resources.gold + resources.elixir + resources.dark_elixir
+            if current_total < min_total:
+                if configs.DEBUG:
+                    logger.debug("_home_upgrade_once: insufficient resources (gold=%d, elixir=%d, dark=%d)",
+                                resources.gold, resources.elixir, resources.dark_elixir)
+                return None
+
         try:
             result = self._open_upgrade_menu(self._click_home_builders)
             if result is None: return None
@@ -465,6 +527,23 @@ class Upgrader:
                 return None
             Input_Handler.click(x, y+0.05)
             human_delay(0.5)
+
+            # Detect upgrade completion time if enabled
+            try:
+                frame = Frame_Handler.get_frame(grayscale=False)
+                # Timer is typically shown near the upgrade name or in the center area
+                timer_section = frame[int(0.3*ADB_WINDOW_DIMS[1]):int(0.6*ADB_WINDOW_DIMS[1]),
+                                     int(0.3*ADB_WINDOW_DIMS[0]):int(0.7*ADB_WINDOW_DIMS[0]), :]
+                timer_text = OCR_Handler.get_text(timer_section)
+                timer_str = " ".join(timer_text).lower()
+                completion_time = parse_time(timer_str)
+                if completion_time is not None:
+                    logger.info("  [Home] %s → Level upgrade, completes in ~%s", upgrade_name, completion_time)
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except Exception:
+                pass  # Timer detection is optional, don't fail the upgrade
+
             return upgrade_name
         except (KeyboardInterrupt, SystemExit): raise
         except Exception as e:
@@ -473,11 +552,33 @@ class Upgrader:
 
     @require_exit()
     def home_upgrade(self, exclude_heroes=False):
+        # Filter out recently failed upgrades
+        now = time.time()
+        valid_upgrades = {name for name, fail_time in self.last_failed_upgrades.items()
+                         if now - fail_time > 300}  # 5-minute cooldown
+        if valid_upgrades != set(self.last_failed_upgrades.keys()):
+            expired = set(self.last_failed_upgrades.keys()) - valid_upgrades
+            for name in expired:
+                del self.last_failed_upgrades[name]
+
         if not Task_Handler.home_base_priority_excluded():
             for priority_level in configs.HOME_BASE_UPGRADE_PRIORITY:
-                upgrade_name = self._home_upgrade_once(priority_level, exclude_heroes=exclude_heroes)
-                if upgrade_name is not None: return upgrade_name
-        return self._home_upgrade_once(exclude_heroes=exclude_heroes)
+                # Filter out recently failed upgrades from priority list
+                filtered_level = [u for u in priority_level if u not in self.last_failed_upgrades]
+                if not filtered_level:
+                    continue
+                upgrade_name = self._home_upgrade_once(filtered_level, exclude_heroes=exclude_heroes)
+                if upgrade_name is not None:
+                    return upgrade_name
+                # Track failed upgrade from this priority level
+                if upgrade_name is None and filtered_level:
+                    for u in filtered_level:
+                        if u not in self.last_failed_upgrades:
+                            self.last_failed_upgrades[u] = now
+
+        # Random upgrade fallback
+        upgrade_name = self._home_upgrade_once(exclude_heroes=exclude_heroes)
+        return upgrade_name
     
     @require_exit()
     def assign_builder_apprentice(self):

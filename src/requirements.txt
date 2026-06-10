@@ -1,4 +1,5 @@
 adbutils
+python-dotenv
 apscheduler
 beautifulsoup4
 curl-cffi

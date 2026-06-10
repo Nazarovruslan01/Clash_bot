@@ -1,9 +1,21 @@
 import logging
+from dataclasses import dataclass
+from typing import Optional
 from utils import *
 import configs
 from configs import *
 
 logger = logging.getLogger("coc_bot")
+
+@dataclass
+class AttackPlan:
+    """Represents an optimal attack strategy for an enemy base."""
+    deploy_x: float
+    deploy_y: float
+    base_type: str  # "dead" | "active" | "engineered"
+    town_hall: Optional[tuple[float, float]] = None
+    resource_cluster: Optional[tuple[float, float]] = None
+    notes: Optional[str] = None
 
 class Attacker:
     def __init__(self):
@@ -43,29 +55,64 @@ class Attacker:
     
     def start_normal_attack(self, timeout=60):
         import time
-        
+
         # Click attack
         Input_Handler.click(0.07, 0.9)
-        
-        # Find a match
-        for _ in range(20):
-            human_delay(0.5)
-            xys = Frame_Handler.locate(self.assets["find_a_match"], thresh=0.9, return_all=True)
-            if len(xys) > 0: break
-        if len(xys) == 0: return False
-        xys = sorted(xys, key=lambda xy: xy[0])
-        x, y = xys[0]
-        if x > 0.2: return False
-        Input_Handler.click(x, y, jitter=False)
-        
-        # Confirm attack
-        for _ in range(20):
-            human_delay(0.5)
-            x, y = Frame_Handler.locate(self.assets["confirm_attack"], thresh=0.9)
-            if x is not None and y is not None: break
-        if x is None or y is None: return False
-        Input_Handler.click(x, y, jitter=False)
-        
+
+        # Find a match with optional loot filtering
+        search_attempts = 0
+        max_searches = configs.MAX_MATCH_SEARCHES if configs.USE_AI_MATCH_FILTER else 1
+
+        while search_attempts < max_searches:
+            # Find a match
+            for _ in range(20):
+                human_delay(0.5)
+                xys = Frame_Handler.locate(self.assets["find_a_match"], thresh=0.9, return_all=True)
+                if len(xys) > 0: break
+            if len(xys) == 0: return False
+            xys = sorted(xys, key=lambda xy: xy[0])
+            x, y = xys[0]
+            if x > 0.2: return False
+            Input_Handler.click(x, y, jitter=False)
+
+            # Confirm attack
+            for _ in range(20):
+                human_delay(0.5)
+                x, y = Frame_Handler.locate(self.assets["confirm_attack"], thresh=0.9)
+                if x is not None and y is not None: break
+            if x is None or y is None: return False
+
+            # Evaluate match loot if AI filtering is enabled
+            if configs.USE_AI_MATCH_FILTER and configs.GEMINI_API_KEY != "" and search_attempts < max_searches - 1:
+                try:
+                    frame = Frame_Handler.get_frame(grayscale=False)
+                    match_eval = OCR_Handler.gemini_evaluate_match(frame)
+                    if match_eval:
+                        gold = match_eval.get("gold", 0)
+                        elixir = match_eval.get("elixir", 0)
+                        dark = match_eval.get("dark_elixir", 0)
+                        total_loot = gold + elixir + dark
+                        min_total = configs.MIN_LOOT_GOLD + configs.MIN_LOOT_ELIXIR + configs.MIN_LOOT_DARK_ELIXIR
+
+                        if match_eval.get("skip") or total_loot < min_total:
+                            logger.debug("[Attacker] Skipping match: gold=%d, elixir=%d, dark=%d", gold, elixir, dark)
+                            # Click back to search again
+                            Input_Handler.click_back()
+                            human_delay(1.0)
+                            search_attempts += 1
+                            continue
+                    else:
+                        # AI evaluation failed or returned empty response, log warning
+                        logger.warning("[Attacker] Match evaluation returned empty, proceeding with attack")
+                except (KeyboardInterrupt, SystemExit):
+                    raise
+                except Exception as e:
+                    logger.warning("[Attacker] Match evaluation failed: %s, proceeding with attack", e)
+
+            # Attack confirmed, proceed to battle
+            Input_Handler.click(x, y, jitter=False)
+            break
+
         # Wait until "end battle" button is found
         start_time = time.time()
         while time.time() - start_time < timeout:
@@ -207,7 +254,7 @@ class Attacker:
         output.append(type_gaps_seen)
         return output
     
-    def deploy_troops(self, card_centers, available_slots=None, card_types=None, card_counts=None):
+    def deploy_troops(self, card_centers, available_slots=None, card_types=None, card_counts=None, attack_plan: Optional["AttackPlan"] = None):
         import time, numpy as np
 
         def card_gray(card_center):
@@ -218,10 +265,16 @@ class Attacker:
         if card_types is None: card_types = [None] * len(card_centers)
         if card_counts is None: card_counts = [0] * len(card_centers)
 
-        # Per-attack random deployment center
+        # Determine deployment center
         Input_Handler._ensure_rng()
-        deploy_x = Input_Handler.rng.uniform(0.35, 0.65)
-        deploy_y = Input_Handler.rng.uniform(0.70, 0.85)
+        if attack_plan is not None:
+            deploy_x = attack_plan.deploy_x
+            deploy_y = attack_plan.deploy_y
+            logger.debug("[Attacker] Using AI-suggested deploy position: (%.3f, %.3f)", deploy_x, deploy_y)
+        else:
+            # Fallback to random deployment center
+            deploy_x = Input_Handler.rng.uniform(0.35, 0.65)
+            deploy_y = Input_Handler.rng.uniform(0.70, 0.85)
 
         # Start holding deploy position w/ secondary touch pointer
         Input_Handler.down(deploy_x, deploy_y, pointer=1)
@@ -256,10 +309,38 @@ class Attacker:
     
     def complete_normal_attack(self, restart=True, exclude_clan_troops=False):
         import time, numpy as np
-        
+
         Input_Handler.zoom(dir="out")
         Input_Handler.swipe_up()
-        
+
+        # Analyze enemy base for optimal attack strategy
+        attack_plan = None
+        if configs.USE_AI_ATTACK_ANALYSIS and configs.GEMINI_API_KEY != "":
+            try:
+                frame = Frame_Handler.get_frame(grayscale=False)
+                result = OCR_Handler.gemini_analyze_base(frame)
+                if result and "recommended_deploy_x" in result and "recommended_deploy_y" in result:
+                    deploy_x = result.get("recommended_deploy_x", 0.5)
+                    deploy_y = result.get("recommended_deploy_y", 0.75)
+                    # Validate coordinates are in valid range [0, 1]
+                    if isinstance(deploy_x, (int, float)) and isinstance(deploy_y, (int, float)) and 0.0 <= deploy_x <= 1.0 and 0.0 <= deploy_y <= 1.0:
+                        attack_plan = AttackPlan(
+                            deploy_x=deploy_x,
+                            deploy_y=deploy_y,
+                            base_type=result.get("base_type", "unknown"),
+                            town_hall=result.get("town_hall"),
+                            resource_cluster=result.get("resource_cluster"),
+                            notes=result.get("notes")
+                        )
+                        logger.info("[Attacker] AttackPlan: deploy=(%.3f, %.3f), type=%s", attack_plan.deploy_x, attack_plan.deploy_y, attack_plan.base_type)
+                    else:
+                        logger.warning("[Attacker] Invalid deploy coords from AI: (%.3f, %.3f), using fallback", deploy_x, deploy_y)
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except Exception as e:
+                if configs.DEBUG:
+                    logger.debug("complete_normal_attack AI analysis: %s", e)
+
         type_gaps_seen = 0
         total_slots_seen = 0
         last_card_left = 0.0
@@ -283,7 +364,7 @@ class Attacker:
             
             # Deploy troops up until the last one visible
             total_slots_seen += len(card_centers) - 1
-            self.deploy_troops(card_centers[:-1], available_slots[:-1], card_types[:-1], card_counts[:-1])
+            self.deploy_troops(card_centers[:-1], available_slots[:-1], card_types[:-1], card_counts[:-1], attack_plan=attack_plan)
             # Scroll over and look for the new position of the last card
             last_card_frame = frame[:, int(card_boundaries[-2] * frame.shape[1]):int(card_boundaries[-1] * frame.shape[1])]
             Input_Handler.swipe_left(x1=card_centers[-1], x2=0.038, y=0.9, hold_end_time=500)
@@ -292,7 +373,7 @@ class Attacker:
             last_card_left = Frame_Handler.locate(last_card_frame, frame, thresh=0.9, grayscale=False, ref="lc")[0]
             # If the card didn't move then there are no more troops so it can be deployed
             if last_card_left is not None and abs(last_card_left - card_boundaries[-2]) < 0.01:
-                self.deploy_troops(card_centers[-1:], available_slots[-1:], card_types[-1:], card_counts[-1:])
+                self.deploy_troops(card_centers[-1:], available_slots[-1:], card_types[-1:], card_counts[-1:], attack_plan=attack_plan)
                 break
             elif last_card_left is None:
                 break

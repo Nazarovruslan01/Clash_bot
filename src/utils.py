@@ -100,6 +100,10 @@ def enable_sleep():
     elif sys.platform == "win32":
         ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS)
 
+def has_gemini_api():
+    """Check if Gemini API is configured and ready to use."""
+    return bool(configs.GEMINI_API_KEY and configs.GEMINI_API_KEY.strip())
+
 def safe_adb_shell(cmd, timeout=30):
     if ADB_DEVICE is None:
         raise RuntimeError("ADB_DEVICE is None")
@@ -829,6 +833,144 @@ class OCR_Handler:
             ),
         )
         return (response.text or '').replace('~', '').splitlines()
+
+    @classmethod
+    def gemini_game_state(cls, frame) -> str:
+        """Fallback game state recognition using Gemini vision."""
+        import time
+        import json
+        import PIL.Image
+        from google import genai
+        from google.genai import types
+
+        if cls._model is None:
+            cls._model = genai.Client(api_key=configs.GEMINI_API_KEY)
+
+        try:
+            img = PIL.Image.fromarray(frame)
+            response = cls._model.models.generate_content(
+                model=configs.GEMINI_MODEL,
+                contents=["What screen is this in Clash of Clans? Reply with only one word from this list: home, builder, attack, loading, dialog, unknown", img],
+                config=types.GenerateContentConfig(
+                    max_output_tokens=8,
+                    thinking_config=types.ThinkingConfig(thinking_budget=0),
+                ),
+            )
+            state = (response.text or "unknown").strip().lower()
+            valid_states = ("home", "builder", "attack", "loading", "dialog", "unknown")
+            return state if state in valid_states else "unknown"
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except Exception:
+            return "unknown"
+
+    @classmethod
+    def gemini_find_button(cls, frame, description: str) -> tuple:
+        """Find a button in the screenshot by description using Gemini vision."""
+        import json
+        import PIL.Image
+        from google import genai
+        from google.genai import types
+
+        if cls._model is None:
+            cls._model = genai.Client(api_key=configs.GEMINI_API_KEY)
+
+        try:
+            img = PIL.Image.fromarray(frame)
+            response = cls._model.models.generate_content(
+                model=configs.GEMINI_MODEL,
+                contents=[f'Find the "{description}" in this Clash of Clans screenshot. Return ONLY valid JSON with normalized coordinates: {{"x": 0.0-1.0 or null, "y": 0.0-1.0 or null}}', img],
+                config=types.GenerateContentConfig(
+                    max_output_tokens=32,
+                    thinking_config=types.ThinkingConfig(thinking_budget=0),
+                ),
+            )
+            data = json.loads(response.text or "{}")
+            x = data.get("x")
+            y = data.get("y")
+            return (x, y) if (isinstance(x, (int, float)) and isinstance(y, (int, float))) else (None, None)
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except Exception:
+            return (None, None)
+
+    @classmethod
+    def gemini_analyze_base(cls, frame) -> dict | None:
+        """Analyze enemy base layout for optimal attack strategy."""
+        import json
+        import PIL.Image
+        from google import genai
+        from google.genai import types
+
+        if cls._model is None:
+            cls._model = genai.Client(api_key=configs.GEMINI_API_KEY)
+
+        try:
+            img = PIL.Image.fromarray(frame)
+            prompt = """Analyze this Clash of Clans enemy base screenshot. Return ONLY valid JSON:
+{
+  "town_hall": [x_normalized, y_normalized],
+  "resource_cluster": [x_normalized, y_normalized],
+  "recommended_deploy_x": x_normalized,
+  "recommended_deploy_y": y_normalized,
+  "base_type": "dead|active|engineered",
+  "notes": "brief observation"
+}
+All coordinates normalized to 0.0-1.0. Null values for missing elements."""
+            
+            response = cls._model.models.generate_content(
+                model=configs.GEMINI_MODEL,
+                contents=[prompt, img],
+                config=types.GenerateContentConfig(
+                    max_output_tokens=128,
+                    thinking_config=types.ThinkingConfig(thinking_budget=0),
+                ),
+            )
+            data = json.loads(response.text or "{}")
+            return data if "recommended_deploy_x" in data else None
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except Exception:
+            return None
+
+    @classmethod
+    def gemini_evaluate_match(cls, frame) -> dict | None:
+        """Evaluate loot value and skip status for current match."""
+        import json
+        import PIL.Image
+        from google import genai
+        from google.genai import types
+
+        if cls._model is None:
+            cls._model = genai.Client(api_key=configs.GEMINI_API_KEY)
+
+        try:
+            img = PIL.Image.fromarray(frame)
+            prompt = """Read the loot amounts in this Clash of Clans matchmaking screen. Return ONLY valid JSON:
+{
+  "gold": amount_or_null,
+  "elixir": amount_or_null,
+  "dark_elixir": amount_or_null,
+  "skip": true_if_low_value
+}"""
+            
+            response = cls._model.models.generate_content(
+                model=configs.GEMINI_MODEL,
+                contents=[prompt, img],
+                config=types.GenerateContentConfig(
+                    max_output_tokens=64,
+                    thinking_config=types.ThinkingConfig(thinking_budget=0),
+                ),
+            )
+            data = json.loads(response.text or "{}")
+            # Validate response has at least one loot value to avoid false negatives on API errors
+            if isinstance(data, dict) and any(k in data for k in ("gold", "elixir", "dark_elixir")):
+                return data
+            return None
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except Exception:
+            return None
 
 class Asset_Manager:
     fonts = {}

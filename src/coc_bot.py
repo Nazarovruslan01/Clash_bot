@@ -124,7 +124,46 @@ class CoC_Bot:
                 return "loading"
         except Exception:
             pass
+
+        # Fallback to Gemini vision for unknown screens
+        if configs.USE_AI_GAME_STATE and configs.GEMINI_API_KEY != "":
+            try:
+                frame = Frame_Handler.get_frame(grayscale=False)
+                state = OCR_Handler.gemini_game_state(frame)
+                if state in ("home", "builder", "loading"):
+                    logger.info("[Bot] Gemini recognized game state: %s", state)
+                    return state
+                elif state in ("dialog", "attack"):
+                    # Popup or attack screen detected, try to dismiss/exit
+                    logger.debug("[Bot] Detected popup/dialog state, attempting to dismiss")
+                    Input_Handler.click_back()
+                    human_delay(0.5)
+                    # Re-check state after dismissal attempt
+                    return self._validate_game_state()
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except Exception:
+                pass
+
         return "unknown"
+
+    def dismiss_popups(self, max_attempts=5):
+        """Auto-dismiss popups like season pass or event notifications."""
+        if not configs.USE_AI_POPUP_DISMISS or configs.GEMINI_API_KEY == "":
+            return
+
+        for attempt in range(max_attempts):
+            try:
+                frame = Frame_Handler.get_frame(grayscale=False)
+                x, y = OCR_Handler.gemini_find_button(frame, "close or dismiss button")
+                if x is None or y is None:
+                    break
+                Input_Handler.click(x, y, jitter=False)
+                human_delay(0.5)
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except Exception:
+                break
 
     def connect_adb(self):
         import time
@@ -157,6 +196,7 @@ class CoC_Bot:
 
                 if start_coc():
                     self.update_status("now")
+                    self.dismiss_popups()
 
                     Task_Handler.get_exclusions()
                     exclude_home_base = Task_Handler.home_base_excluded(use_cached=True)
