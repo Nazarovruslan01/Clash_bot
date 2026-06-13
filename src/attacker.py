@@ -254,6 +254,37 @@ class Attacker:
         output.append(type_gaps_seen)
         return output
     
+    def _resolve_deploy_point(self, troop_type, attack_plan):
+        """Resolve deploy point based on troop type and attack plan.
+
+        Returns (x, y) deploy point. If attack_plan is None, returns (None, None).
+        Otherwise returns default deploy_x/y when specific coordinates unavailable.
+        - hero/clan: town_hall if available, else default
+        - troop: resource_cluster (perimeter approach) if available, else default
+        - spell: resource_cluster if available, else default (will use random positions later)
+        - None: always default
+        """
+        if attack_plan is None:
+            return None, None
+        
+        th = attack_plan.town_hall          # [x, y] or None
+        rc = attack_plan.resource_cluster   # [x, y] or None
+        dx, dy = attack_plan.deploy_x, attack_plan.deploy_y
+        
+        if troop_type in ("hero", "clan"):
+            if th and len(th) == 2:
+                return float(th[0]), float(th[1])
+        elif troop_type == "troop":
+            if rc and len(rc) == 2:
+                x = float(rc[0])
+                y = min(float(rc[1]) + 0.15, 0.95)  # approach from below
+                return x, y
+        elif troop_type == "spell":
+            if rc and len(rc) == 2:
+                return float(rc[0]), float(rc[1])
+        
+        return dx, dy  # default for all cases
+
     def deploy_troops(self, card_centers, available_slots=None, card_types=None, card_counts=None, attack_plan: Optional["AttackPlan"] = None):
         import time, numpy as np
 
@@ -265,24 +296,27 @@ class Attacker:
         if card_types is None: card_types = [None] * len(card_centers)
         if card_counts is None: card_counts = [0] * len(card_centers)
 
-        # Determine deployment center
         Input_Handler._ensure_rng()
-        if attack_plan is not None:
-            deploy_x = attack_plan.deploy_x
-            deploy_y = attack_plan.deploy_y
-            logger.debug("[Attacker] Using AI-suggested deploy position: (%.3f, %.3f)", deploy_x, deploy_y)
-        else:
-            # Fallback to random deployment center
-            deploy_x = Input_Handler.rng.uniform(0.35, 0.65)
-            deploy_y = Input_Handler.rng.uniform(0.70, 0.85)
+        
+        # Determine default deployment center (fallback)
+        default_deploy_x = Input_Handler.rng.uniform(0.35, 0.65)
+        default_deploy_y = Input_Handler.rng.uniform(0.70, 0.85)
 
         # Start holding deploy position w/ secondary touch pointer
-        Input_Handler.down(deploy_x, deploy_y, pointer=1)
+        Input_Handler.down(default_deploy_x, default_deploy_y, pointer=1)
         try:
             for i in range(len(card_centers)):
                 if available_slots[i]:
                     # Select slot
                     Input_Handler.click(card_centers[i], 0.9)
+
+                    # Resolve deploy point for this troop type
+                    deploy_x, deploy_y = self._resolve_deploy_point(card_types[i], attack_plan)
+                    if deploy_x is None or deploy_y is None:
+                        deploy_x, deploy_y = default_deploy_x, default_deploy_y
+                    
+                    if configs.DEBUG:
+                        logger.debug("[Attacker] Deploying %s at (%.3f, %.3f)", card_types[i], deploy_x, deploy_y)
 
                     # Deploy selected slot
                     if card_types[i] in ["hero", "clan"]:

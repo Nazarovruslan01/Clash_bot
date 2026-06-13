@@ -219,6 +219,9 @@ class CoC_Bot:
                     logger.info("  Home:    upgrades=%s  attacks=%s", 'on ' if not skip_home_base_upgrades else 'off', 'on ' if not exclude_home_attacks else 'off')
                     logger.info("  Builder: upgrades=%s  attacks=%s", 'on ' if not skip_builder_base_upgrades else 'off', 'on ' if not exclude_builder_attacks else 'off')
 
+                    # Collect min_completion_time from upgrades
+                    min_completion_time = None
+
                     # Check home base
                     if not skip_home_base_upgrades or not exclude_home_attacks:
                         to_home_base()
@@ -226,7 +229,10 @@ class CoC_Bot:
                         self.upgrader.collect_resources()
 
                     if not skip_home_base_upgrades:
-                        self.upgrader.run_home_base(exclude_home_base, exclude_home_lab)
+                        home_min_time = self.upgrader.run_home_base(exclude_home_base, exclude_home_lab)
+                        if home_min_time is not None:
+                            if min_completion_time is None or home_min_time < min_completion_time:
+                                min_completion_time = home_min_time
                     if not exclude_home_attacks:
                         if configs.USE_TRAINING_POTION and not Task_Handler.magic_items_excluded(use_cached=True):
                             self.upgrader.use_potion("training_potion")
@@ -253,8 +259,15 @@ class CoC_Bot:
 
                 _err_count = 0
                 Input_Handler._ensure_rng()
+                
+                # Use dynamic CHECK_INTERVAL based on upgrade completion time
+                next_interval = CHECK_INTERVAL
+                if min_completion_time is not None and min_completion_time < CHECK_INTERVAL:
+                    next_interval = min_completion_time
+                    logger.info("[Bot] Using dynamic interval: %ds (from upgrade completion time)", next_interval)
+                
                 jitter = int(Input_Handler.rng.integers(-CHECK_INTERVAL_JITTER, CHECK_INTERVAL_JITTER + 1))
-                time.sleep(max(0, CHECK_INTERVAL + jitter))
+                time.sleep(max(0, next_interval + jitter))
 
             except (KeyboardInterrupt, SystemExit): raise
             except Exception as e:

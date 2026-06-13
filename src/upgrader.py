@@ -429,11 +429,11 @@ class Upgrader:
                 if configs.DEBUG:
                     logger.debug("_home_upgrade_once: insufficient resources (gold=%d, elixir=%d, dark=%d)",
                                 resources.gold, resources.elixir, resources.dark_elixir)
-                return None
+                return None, None
 
         try:
             result = self._open_upgrade_menu(self._click_home_builders)
-            if result is None: return None
+            if result is None: return None, None
             x_sug, y_sug, sug_template, menu_left, menu_top, menu_right, menu_bottom, menu_center = result
 
             if upgrade_text is not None:
@@ -442,7 +442,7 @@ class Upgrader:
                     upgrade_text = list(set(upgrade_text) - set(self.hero_names))
                 templates = [render_text(text, "CCBackBeat", 27) for text in upgrade_text]
                 if not templates:
-                    return None
+                    return None, None
 
                 locate_template = self._make_item_locator(sug_template, menu_left, menu_right, return_name=True, return_all=True)
                 x, y, _ = self._scroll_locate_upgrade(
@@ -452,7 +452,7 @@ class Upgrader:
                 )
                 if x is None or y is None:
                     if configs.DEBUG: logger.debug("_home_upgrade_once: priority item not found in menu (%s)", upgrade_text)
-                    return None
+                    return None, None
                 Input_Handler.click(x_sug, y)
             else:
                 menu = Frame_Handler.get_frame_section(menu_left, menu_top, menu_right, menu_bottom, grayscale=False)
@@ -481,7 +481,7 @@ class Upgrader:
                         x_upgrade, y_upgrade = menu_center, town_hall_loc[1]
                     else:
                         if configs.DEBUG: logger.debug("_home_upgrade_once: no valid random upgrade row found")
-                        return None
+                        return None, None
                 if configs.DEBUG: logger.debug("_home_upgrade_once: clicking random upgrade at (%.3f, %.3f)", x_upgrade, y_upgrade)
                 Input_Handler.click(x_upgrade, y_upgrade)
 
@@ -490,7 +490,7 @@ class Upgrader:
             # Hero upgrades go directly to confirm screen
             in_hero_hall = not get_home_builders(0, return_amount=False, raise_exception=False)
             if in_hero_hall:
-                if Task_Handler.heroes_excluded(): return None
+                if Task_Handler.heroes_excluded(): return None, None
             else:
                 # Guard: don't click if upgrade panel is still open (would toggle-close it)
                 sug_template, _, _ = self._get_suggested_upgrade_template()
@@ -501,20 +501,20 @@ class Upgrader:
                 x, y = Frame_Handler.locate(self.assets["upgrade"], thresh=0.90, grayscale=False)
                 if x is None or y is None:
                     if configs.DEBUG: logger.debug("_home_upgrade_once: upgrade button not found after selecting building")
-                    return None
+                    return None, None
                 Input_Handler.click(x, y)
                 human_delay(0.5)
 
             x, y = Frame_Handler.locate(self.assets["upgrade_name"], ref="lc", thresh=0.9)
             if x is None or y is None:
                 if configs.DEBUG: logger.debug("_home_upgrade_once: upgrade_name label not found")
-                return None
+                return None, None
             section = Frame_Handler.get_frame_section(x+0.122, y-0.04, 1-x, y+0.035, high_contrast=True, thresh=255, use_cached=True)
             if configs.DEBUG: Frame_Handler.save_frame(section, "debug/upgrade_name.png")
             text_list = OCR_Handler.get_text(section)
             if not text_list:
                 if configs.DEBUG: logger.debug("_home_upgrade_once: OCR returned empty text for upgrade name")
-                return None
+                return None, None
             raw = text_list[0].lower()
             raw = raw[:-3].strip() if len(raw) > 3 else raw
             upgrade_name = spell_check(re.sub(r"\s*x\d+$", "", raw))
@@ -522,11 +522,12 @@ class Upgrader:
             x, y = Frame_Handler.locate(self.assets["confirm"], grayscale=False, thresh=0.85, use_cached=True)
             if x is None or y is None:
                 if configs.DEBUG: logger.debug("_home_upgrade_once: confirm button not found")
-                return None
+                return None, None
             Input_Handler.click(x, y+0.05)
             human_delay(0.5)
 
             # Detect upgrade completion time if enabled
+            completion_time = None
             try:
                 frame = Frame_Handler.get_frame(grayscale=False)
                 # Timer is typically shown near the upgrade name or in the center area
@@ -542,11 +543,11 @@ class Upgrader:
             except Exception:
                 pass  # Timer detection is optional, don't fail the upgrade
 
-            return upgrade_name
+            return upgrade_name, completion_time
         except (KeyboardInterrupt, SystemExit): raise
         except Exception as e:
             if configs.DEBUG: logger.debug("_home_upgrade_once exception: %s", e)
-            return None
+            return None, None
 
     @require_exit()
     def home_upgrade(self, exclude_heroes=False):
@@ -557,24 +558,33 @@ class Upgrader:
         for name in upgrades_past_cooldown:
             del self.last_failed_upgrades[name]
 
+        min_completion_time = None
+
         if not Task_Handler.home_base_priority_excluded():
             for priority_level in configs.HOME_BASE_UPGRADE_PRIORITY:
                 # Filter out recently failed upgrades from priority list
                 filtered_level = [u for u in priority_level if u not in self.last_failed_upgrades]
                 if not filtered_level:
                     continue
-                upgrade_name = self._home_upgrade_once(filtered_level, exclude_heroes=exclude_heroes)
+                upgrade_name, completion_time = self._home_upgrade_once(filtered_level, exclude_heroes=exclude_heroes)
                 if upgrade_name is not None:
-                    return upgrade_name
+                    return upgrade_name, completion_time
                 # Track failed upgrade from this priority level
                 if upgrade_name is None and filtered_level:
                     for u in filtered_level:
                         if u not in self.last_failed_upgrades:
                             self.last_failed_upgrades[u] = now
+                # Track minimum completion time across all attempts
+                if completion_time is not None:
+                    if min_completion_time is None or completion_time < min_completion_time:
+                        min_completion_time = completion_time
 
         # Random upgrade fallback
-        upgrade_name = self._home_upgrade_once(exclude_heroes=exclude_heroes)
-        return upgrade_name
+        upgrade_name, completion_time = self._home_upgrade_once(exclude_heroes=exclude_heroes)
+        if completion_time is not None:
+            if min_completion_time is None or completion_time < min_completion_time:
+                min_completion_time = completion_time
+        return upgrade_name, min_completion_time
     
     @require_exit()
     def assign_builder_apprentice(self):
@@ -617,7 +627,7 @@ class Upgrader:
         Input_Handler._ensure_rng()
         try:
             result = self._open_upgrade_menu(self._click_home_lab)
-            if result is None: return None
+            if result is None: return None, None
             x_sug, y_sug, sug_template, menu_left, menu_top, menu_right, menu_bottom, menu_center = result
 
             if upgrade_text is not None:
@@ -630,12 +640,12 @@ class Upgrader:
                     menu_left, menu_right, menu_top, menu_bottom,
                     dir="down" if configs.START_FROM_MENU_TOP else "up",
                 )
-                if x is None or y is None: return None
+                if x is None or y is None: return None, None
                 Input_Handler.click(x, y)
             else:
                 menu = Frame_Handler.get_frame_section(menu_left, menu_top, menu_right, menu_bottom, grayscale=False)
                 potential_y_locs = self._get_potential_upgrade_locs(menu)
-                if len(potential_y_locs) == 0: return None
+                if len(potential_y_locs) == 0: return None, None
                 x_upgrade = menu_center
                 y_upgrade = menu_top + Input_Handler.rng.choice(potential_y_locs) / ADB_WINDOW_DIMS[1]
                 Input_Handler.click(x_upgrade, y_upgrade)
@@ -643,35 +653,53 @@ class Upgrader:
             human_delay(0.5)
 
             x, y = Frame_Handler.locate(self.assets["upgrade_name"], ref="lc", thresh=0.9)
-            if x is None or y is None: return None
+            if x is None or y is None: return None, None
             section = Frame_Handler.get_frame_section(x+0.122, y-0.04, 1-x, y+0.035, high_contrast=True, thresh=255, use_cached=True)
             if configs.DEBUG: Frame_Handler.save_frame(section, "debug/lab_upgrade_name.png")
             text_list = OCR_Handler.get_text(section)
-            if not text_list: return None
+            if not text_list: return None, None
             raw = text_list[0].lower()
             raw = raw[:-3].strip() if len(raw) > 3 else raw
             upgrade_name = spell_check(re.sub(r"\s*x\d+$", "", raw))
 
             x, y = Frame_Handler.locate(self.assets["confirm"], grayscale=False, thresh=0.85, use_cached=True)
-            if x is None or y is None: return None
+            if x is None or y is None: return None, None
             section = Frame_Handler.get_frame_section(x-0.08, y+0.02, x+0.08, y+0.1, grayscale=False, thresh=255, use_cached=True)
             if configs.DEBUG: Frame_Handler.save_frame(section, "debug/lab_upgrade_cost.png")
-            if check_color((255, 136, 127), section, tol=10): return None
+            if check_color((255, 136, 127), section, tol=10): return None, None
             Input_Handler.click(x, y+0.05)
             human_delay(0.5)
-            return upgrade_name
+            
+            # Detect lab upgrade completion time
+            completion_time = None
+            try:
+                frame = Frame_Handler.get_frame(grayscale=False)
+                timer_section = frame[int(0.3*ADB_WINDOW_DIMS[1]):int(0.6*ADB_WINDOW_DIMS[1]),
+                                     int(0.3*ADB_WINDOW_DIMS[0]):int(0.7*ADB_WINDOW_DIMS[0]), :]
+                timer_text = OCR_Handler.get_text(timer_section)
+                timer_str = " ".join(timer_text).lower()
+                completion_time = parse_time(timer_str)
+                if completion_time is not None:
+                    logger.info("  [Home Lab] %s → Level upgrade, completes in ~%s", upgrade_name, completion_time)
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except Exception:
+                pass
+            
+            return upgrade_name, completion_time
         except (KeyboardInterrupt, SystemExit): raise
         except Exception as e:
             if configs.DEBUG: logger.debug("_home_lab_upgrade_once: %s", e)
-            return None
+            return None, None
 
     @require_exit()
     def home_lab_upgrade(self):
         if not Task_Handler.home_lab_priority_excluded():
             for priority_level in configs.HOME_LAB_UPGRADE_PRIORITY:
-                upgrade_name = self._home_lab_upgrade_once(priority_level)
-                if upgrade_name is not None: return upgrade_name
-        return self._home_lab_upgrade_once()
+                upgrade_name, completion_time = self._home_lab_upgrade_once(priority_level)
+                if upgrade_name is not None: return upgrade_name, completion_time
+        result = self._home_lab_upgrade_once()
+        return result
 
     @require_exit()
     def assign_lab_assistant(self):
@@ -714,14 +742,14 @@ class Upgrader:
         Input_Handler._ensure_rng()
         try:
             result = self._open_upgrade_menu(self._click_builder_builders)
-            if result is None: return None
+            if result is None: return None, None
             x_sug, y_sug, sug_template, menu_left, menu_top, menu_right, menu_bottom, menu_center = result
 
             if upgrade_text is not None:
                 if isinstance(upgrade_text, str): upgrade_text = [upgrade_text]
                 templates = [render_text(text, "CCBackBeat", 27) for text in upgrade_text]
                 if not templates:
-                    return None
+                    return None, None
 
                 locate_template = self._make_item_locator(sug_template, menu_left, menu_right, return_name=True)
                 x, y, upgrade_name = self._scroll_locate_upgrade(
@@ -729,17 +757,18 @@ class Upgrader:
                     menu_left, menu_right, menu_top, menu_bottom,
                     dir="down" if configs.START_FROM_MENU_TOP else "up",
                 )
-                if x is None or y is None: return None
+                if x is None or y is None: return None, None
                 Input_Handler.click(x, y)
             else:
                 menu_snap = Frame_Handler.get_frame_section(menu_left, menu_top, menu_right, menu_bottom, grayscale=False)
                 potential_y_locs = self._get_potential_upgrade_locs(menu_snap)
-                if len(potential_y_locs) == 0: return None
+                if len(potential_y_locs) == 0: return None, None
                 x_upgrade = menu_center
                 y_upgrade = menu_top + Input_Handler.rng.choice(potential_y_locs) / ADB_WINDOW_DIMS[1]
+                frame = Frame_Handler.get_frame(grayscale=False, use_cached=True)
                 section = Frame_Handler.high_contrast(Frame_Handler.crop(frame, menu_left, y_upgrade - 0.035, menu_center, y_upgrade + 0.025))
                 text_list = OCR_Handler.get_text(section)
-                if not text_list: return None
+                if not text_list: return None, None
                 upgrade_name = spell_check(re.sub(r"\s*x\d+$", "", text_list[0].lower()))
                 Input_Handler.click(x_upgrade, y_upgrade)
 
@@ -752,40 +781,71 @@ class Upgrader:
                 human_delay(0.5)
 
             x, y = Frame_Handler.locate(self.assets["upgrade"], thresh=0.90, grayscale=False)
-            if x is None or y is None: return None
+            if x is None or y is None: return None, None
             Input_Handler.click(x, y)
             human_delay(0.5)
 
             confirm = self._find_builder_confirm()
-            if confirm is None: return None
+            if confirm is None: return None, None
             Input_Handler.click(*confirm, jitter=False)
             human_delay(0.5)
-            return upgrade_name
+
+            # Detect upgrade completion time if enabled
+            completion_time = None
+            try:
+                frame = Frame_Handler.get_frame(grayscale=False)
+                # Timer is typically shown near the upgrade name or in the center area
+                timer_section = frame[int(0.3*ADB_WINDOW_DIMS[1]):int(0.6*ADB_WINDOW_DIMS[1]),
+                                     int(0.3*ADB_WINDOW_DIMS[0]):int(0.7*ADB_WINDOW_DIMS[0]), :]
+                timer_text = OCR_Handler.get_text(timer_section)
+                timer_str = " ".join(timer_text).lower()
+                completion_time = parse_time(timer_str)
+                if completion_time is not None:
+                    logger.info("  [Builder] %s → Level upgrade, completes in ~%s", upgrade_name, completion_time)
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except Exception:
+                pass  # Timer detection is optional, don't fail the upgrade
+
+            return upgrade_name, completion_time
         except (KeyboardInterrupt, SystemExit): raise
         except Exception as e:
             if configs.DEBUG: logger.debug("_builder_upgrade_once: %s", e)
-            return None
+            return None, None
 
     @require_exit()
     def builder_upgrade(self):
+        min_completion_time = None
+
         if not Task_Handler.builder_base_priority_excluded():
             for priority_level in configs.BUILDER_BASE_UPGRADE_PRIORITY:
-                upgrade_name = self._builder_upgrade_once(priority_level)
-                if upgrade_name is not None: return upgrade_name
-        return self._builder_upgrade_once()
+                upgrade_name, completion_time = self._builder_upgrade_once(priority_level)
+                if upgrade_name is not None:
+                    return upgrade_name, completion_time
+                # Track minimum completion time across all attempts
+                if completion_time is not None:
+                    if min_completion_time is None or completion_time < min_completion_time:
+                        min_completion_time = completion_time
+
+        # Random upgrade fallback
+        upgrade_name, completion_time = self._builder_upgrade_once()
+        if completion_time is not None:
+            if min_completion_time is None or completion_time < min_completion_time:
+                min_completion_time = completion_time
+        return upgrade_name, min_completion_time
 
     def _builder_lab_upgrade_once(self, upgrade_text=None):
         Input_Handler._ensure_rng()
         try:
             result = self._open_upgrade_menu(self._click_builder_lab)
-            if result is None: return None
+            if result is None: return None, None
             x_sug, y_sug, sug_template, menu_left, menu_top, menu_right, menu_bottom, menu_center = result
 
             if upgrade_text is not None:
                 if isinstance(upgrade_text, str): upgrade_text = [upgrade_text]
                 templates = [render_text(text, "CCBackBeat", 27) for text in upgrade_text]
                 if not templates:
-                    return None
+                    return None, None
 
                 locate_template = self._make_item_locator(sug_template, menu_left, menu_right, return_name=True)
                 x, y, upgrade_name = self._scroll_locate_upgrade(
@@ -793,40 +853,71 @@ class Upgrader:
                     menu_left, menu_right, menu_top, menu_bottom,
                     dir="down" if configs.START_FROM_MENU_TOP else "up",
                 )
-                if x is None or y is None: return None
+                if x is None or y is None: return None, None
                 Input_Handler.click(x, y)
             else:
                 menu_snap = Frame_Handler.get_frame_section(menu_left, menu_top, menu_right, menu_bottom, grayscale=False)
                 frame = Frame_Handler.get_frame(grayscale=False, use_cached=True)
                 potential_y_locs = self._get_potential_upgrade_locs(menu_snap)
-                if len(potential_y_locs) == 0: return None
+                if len(potential_y_locs) == 0: return None, None
                 x_upgrade = menu_center
                 y_upgrade = menu_top + Input_Handler.rng.choice(potential_y_locs) / ADB_WINDOW_DIMS[1]
                 section = Frame_Handler.high_contrast(Frame_Handler.crop(frame, menu_left, y_upgrade - 0.035, menu_center, y_upgrade + 0.025))
                 text_list = OCR_Handler.get_text(section)
-                if not text_list: return None
+                if not text_list: return None, None
                 upgrade_name = spell_check(re.sub(r"\s*x\d+$", "", text_list[0].lower()))
                 Input_Handler.click(x_upgrade, y_upgrade)
 
             human_delay(0.5)
 
             confirm = self._find_builder_confirm()
-            if confirm is None: return None
+            if confirm is None: return None, None
             Input_Handler.click(*confirm, jitter=False)
             human_delay(0.5)
-            return upgrade_name
+
+            # Detect upgrade completion time if enabled
+            completion_time = None
+            try:
+                frame = Frame_Handler.get_frame(grayscale=False)
+                # Timer is typically shown near the upgrade name or in the center area
+                timer_section = frame[int(0.3*ADB_WINDOW_DIMS[1]):int(0.6*ADB_WINDOW_DIMS[1]),
+                                     int(0.3*ADB_WINDOW_DIMS[0]):int(0.7*ADB_WINDOW_DIMS[0]), :]
+                timer_text = OCR_Handler.get_text(timer_section)
+                timer_str = " ".join(timer_text).lower()
+                completion_time = parse_time(timer_str)
+                if completion_time is not None:
+                    logger.info("  [Builder Lab] %s → Level upgrade, completes in ~%s", upgrade_name, completion_time)
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except Exception:
+                pass  # Timer detection is optional, don't fail the upgrade
+
+            return upgrade_name, completion_time
         except (KeyboardInterrupt, SystemExit): raise
         except Exception as e:
             if configs.DEBUG: logger.debug("_builder_lab_upgrade_once: %s", e)
-            return None
+            return None, None
 
     @require_exit()
     def builder_lab_upgrade(self):
+        min_completion_time = None
+
         if not Task_Handler.builder_lab_priority_excluded():
             for priority_level in configs.BUILDER_LAB_UPGRADE_PRIORITY:
-                upgrade_name = self._builder_lab_upgrade_once(priority_level)
-                if upgrade_name is not None: return upgrade_name
-        return self._builder_lab_upgrade_once()
+                upgrade_name, completion_time = self._builder_lab_upgrade_once(priority_level)
+                if upgrade_name is not None:
+                    return upgrade_name, completion_time
+                # Track minimum completion time across all attempts
+                if completion_time is not None:
+                    if min_completion_time is None or completion_time < min_completion_time:
+                        min_completion_time = completion_time
+
+        # Random upgrade fallback
+        upgrade_name, completion_time = self._builder_lab_upgrade_once()
+        if completion_time is not None:
+            if min_completion_time is None or completion_time < min_completion_time:
+                min_completion_time = completion_time
+        return upgrade_name, min_completion_time
     
     # ============================================================
     # 📡 Upgrade Monitoring
@@ -840,6 +931,7 @@ class Upgrader:
         Input_Handler.swipe_down()
 
         exclude_heroes = Task_Handler.heroes_excluded()
+        min_completion_time = None
 
         # Building upgrades
         upgrades_started = []
@@ -854,7 +946,10 @@ class Upgrader:
                 try:
                     initial_builders = get_home_builders(1)
                     if initial_builders <= max(0, OPEN_HOME_BUILDERS): break
-                    upgraded = self.home_upgrade(exclude_heroes=exclude_heroes)
+                    upgraded, completion_time = self.home_upgrade(exclude_heroes=exclude_heroes)
+                    if completion_time is not None:
+                        if min_completion_time is None or completion_time < min_completion_time:
+                            min_completion_time = completion_time
                     human_delay(0.5)
                     final_builders = get_home_builders(1)
                     if upgraded is not None:
@@ -887,7 +982,10 @@ class Upgrader:
                     self.use_potion("research_potion")
                     lab_available = self.home_lab_available(1)
             if lab_available:
-                upgraded = self.home_lab_upgrade()
+                upgraded, completion_time = self.home_lab_upgrade()
+                if completion_time is not None:
+                    if min_completion_time is None or completion_time < min_completion_time:
+                        min_completion_time = completion_time
                 human_delay(0.5)
                 if upgraded is not None: lab_upgrades_started.append(upgraded.lower())
         except (KeyboardInterrupt, SystemExit): raise
@@ -906,6 +1004,8 @@ class Upgrader:
             logger.info("  [Home Lab] No lab upgrade started")
         for upgrade in upgrades_started + lab_upgrades_started:
             send_notification(f"Started upgrading {upgrade}")
+        
+        return min_completion_time
 
     def run_builder_base(self, exclude_base=False, exclude_lab=False):
         import time
@@ -924,7 +1024,7 @@ class Upgrader:
                 try:
                     initial_builders = get_builder_builders(1)
                     if initial_builders <= max(0, OPEN_BUILDER_BUILDERS): break
-                    upgraded = self.builder_upgrade()
+                    upgraded, _ = self.builder_upgrade()
                     human_delay(0.5)
                     final_builders = get_builder_builders(1)
                     if upgraded is not None:
@@ -949,7 +1049,7 @@ class Upgrader:
         lab_upgrades_started = []
         try:
             if not exclude_lab and self.builder_lab_available(1):
-                upgraded = self.builder_lab_upgrade()
+                upgraded, _ = self.builder_lab_upgrade()
                 human_delay(0.5)
                 if upgraded is not None: lab_upgrades_started.append(upgraded.lower())
         except (KeyboardInterrupt, SystemExit): raise
