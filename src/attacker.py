@@ -64,6 +64,7 @@ class Attacker:
         max_searches = configs.MAX_MATCH_SEARCHES if configs.USE_AI_MATCH_FILTER else 1
 
         while search_attempts < max_searches:
+            search_attempts += 1
             # Find a match
             for _ in range(20):
                 human_delay(0.5)
@@ -83,7 +84,7 @@ class Attacker:
             if x is None or y is None: return False
 
             # Evaluate match loot if AI filtering is enabled
-            if configs.USE_AI_MATCH_FILTER and configs.GEMINI_API_KEY != "" and search_attempts < max_searches - 1:
+            if configs.USE_AI_MATCH_FILTER and configs.GEMINI_API_KEY != "" and search_attempts < max_searches:
                 try:
                     frame = Frame_Handler.get_frame(grayscale=False)
                     match_eval = OCR_Handler.gemini_evaluate_match(frame)
@@ -99,7 +100,6 @@ class Attacker:
                             # Click back to search again
                             Input_Handler.click_back()
                             human_delay(1.0)
-                            search_attempts += 1
                             continue
                     else:
                         # AI evaluation failed or returned empty response, log warning
@@ -416,7 +416,7 @@ class Attacker:
                     get_home_builders(1)
                     break
                 except (KeyboardInterrupt, SystemExit): raise
-                except: pass
+                except Exception: pass
             if time.time() - start_time >= timeout: return
             
             # Complete an attack
@@ -443,7 +443,7 @@ class Attacker:
                     get_builder_builders(1)
                     break
                 except (KeyboardInterrupt, SystemExit): raise
-                except: pass
+                except Exception: pass
             if time.time() - start_time >= timeout: return
             
             # Complete an attack

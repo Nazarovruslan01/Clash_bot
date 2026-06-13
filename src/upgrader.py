@@ -416,8 +416,7 @@ class Upgrader:
                 res = locate_template_func()
                 if res[0] is not None and res[1] is not None: break
         return res
-    
-    @require_exit()
+
     def _home_upgrade_once(self, upgrade_text=None, exclude_heroes=False):
         Input_Handler._ensure_rng()
 
@@ -442,8 +441,8 @@ class Upgrader:
                 if exclude_heroes:
                     upgrade_text = list(set(upgrade_text) - set(self.hero_names))
                 templates = [render_text(text, "CCBackBeat", 27) for text in upgrade_text]
-                combined = list(zip(templates, upgrade_text))
-                templates, upgrade_text = zip(*combined)
+                if not templates:
+                    return None
 
                 locate_template = self._make_item_locator(sug_template, menu_left, menu_right, return_name=True, return_all=True)
                 x, y, _ = self._scroll_locate_upgrade(
@@ -458,7 +457,6 @@ class Upgrader:
             else:
                 menu = Frame_Handler.get_frame_section(menu_left, menu_top, menu_right, menu_bottom, grayscale=False)
                 if configs.DEBUG: Frame_Handler.save_frame(menu, "debug/home_upgrade_menu.png")
-                frame = Frame_Handler.get_frame(grayscale=False, use_cached=True)
                 potential_y_locs = self._get_potential_upgrade_locs(menu)
                 if configs.DEBUG: logger.debug("_home_upgrade_once: %d potential random upgrade rows", len(potential_y_locs))
                 town_hall_template = [render_text("Town Hall", "CCBackBeat", 27)]
@@ -554,12 +552,10 @@ class Upgrader:
     def home_upgrade(self, exclude_heroes=False):
         # Filter out recently failed upgrades
         now = time.time()
-        valid_upgrades = {name for name, fail_time in self.last_failed_upgrades.items()
-                         if now - fail_time > 300}  # 5-minute cooldown
-        if valid_upgrades != set(self.last_failed_upgrades.keys()):
-            expired = set(self.last_failed_upgrades.keys()) - valid_upgrades
-            for name in expired:
-                del self.last_failed_upgrades[name]
+        upgrades_past_cooldown = {name for name, fail_time in self.last_failed_upgrades.items()
+                                   if now - fail_time > 300}  # 5-minute cooldown
+        for name in upgrades_past_cooldown:
+            del self.last_failed_upgrades[name]
 
         if not Task_Handler.home_base_priority_excluded():
             for priority_level in configs.HOME_BASE_UPGRADE_PRIORITY:
@@ -616,8 +612,7 @@ class Upgrader:
         except (KeyboardInterrupt, SystemExit): raise
         except Exception as e:
             if configs.DEBUG: logger.debug("assign_builder_apprentice: %s", e)
-    
-    @require_exit()
+
     def _home_lab_upgrade_once(self, upgrade_text=None):
         Input_Handler._ensure_rng()
         try:
@@ -639,7 +634,6 @@ class Upgrader:
                 Input_Handler.click(x, y)
             else:
                 menu = Frame_Handler.get_frame_section(menu_left, menu_top, menu_right, menu_bottom, grayscale=False)
-                frame = Frame_Handler.get_frame(grayscale=False, use_cached=True)
                 potential_y_locs = self._get_potential_upgrade_locs(menu)
                 if len(potential_y_locs) == 0: return None
                 x_upgrade = menu_center
@@ -716,7 +710,6 @@ class Upgrader:
         except Exception as e:
             if configs.DEBUG: logger.debug("assign_lab_assistant: %s", e)
     
-    @require_exit()
     def _builder_upgrade_once(self, upgrade_text=None):
         Input_Handler._ensure_rng()
         try:
@@ -727,8 +720,8 @@ class Upgrader:
             if upgrade_text is not None:
                 if isinstance(upgrade_text, str): upgrade_text = [upgrade_text]
                 templates = [render_text(text, "CCBackBeat", 27) for text in upgrade_text]
-                combined = list(zip(templates, upgrade_text))
-                templates, upgrade_text = zip(*combined)
+                if not templates:
+                    return None
 
                 locate_template = self._make_item_locator(sug_template, menu_left, menu_right, return_name=True)
                 x, y, upgrade_name = self._scroll_locate_upgrade(
@@ -740,7 +733,6 @@ class Upgrader:
                 Input_Handler.click(x, y)
             else:
                 menu_snap = Frame_Handler.get_frame_section(menu_left, menu_top, menu_right, menu_bottom, grayscale=False)
-                frame = Frame_Handler.get_frame(grayscale=False, use_cached=True)
                 potential_y_locs = self._get_potential_upgrade_locs(menu_snap)
                 if len(potential_y_locs) == 0: return None
                 x_upgrade = menu_center
@@ -781,8 +773,7 @@ class Upgrader:
                 upgrade_name = self._builder_upgrade_once(priority_level)
                 if upgrade_name is not None: return upgrade_name
         return self._builder_upgrade_once()
-    
-    @require_exit()
+
     def _builder_lab_upgrade_once(self, upgrade_text=None):
         Input_Handler._ensure_rng()
         try:
@@ -793,8 +784,8 @@ class Upgrader:
             if upgrade_text is not None:
                 if isinstance(upgrade_text, str): upgrade_text = [upgrade_text]
                 templates = [render_text(text, "CCBackBeat", 27) for text in upgrade_text]
-                combined = list(zip(templates, upgrade_text))
-                templates, upgrade_text = zip(*combined)
+                if not templates:
+                    return None
 
                 locate_template = self._make_item_locator(sug_template, menu_left, menu_right, return_name=True)
                 x, y, upgrade_name = self._scroll_locate_upgrade(

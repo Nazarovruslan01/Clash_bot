@@ -17,6 +17,7 @@ GEMINI_MODEL = "gemini-2.5-flash"
 INSTANCE_IDS = ["main"]
 ADB_ADDRESSES = ["127.0.0.1:5555"] # Bluestacks ADB addresses in order of instance IDs
 DEFAULT_INSTANCE_ID = INSTANCE_IDS[0]
+BLUESTACKS_PATH = r"C:\Program Files\BlueStacks_nxt\HD-Player.exe" # Path to BlueStacks executable (Windows only)
 
 # REQUIRED: General Settings
 LOCAL_GUI = True # web app not required
