@@ -14,3 +14,6 @@ src/.env
 scripts/start.sh
 app/data
 app/coc_bot_web_app.service
+# Editor/IDE directories
+.serena/
+.zed/

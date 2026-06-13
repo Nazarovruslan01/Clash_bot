@@ -59,7 +59,7 @@ class CoC_Bot:
             startupinfo = subprocess.STARTUPINFO()
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             startupinfo.wShowWindow = 6
-            subprocess.Popen([r"C:\Program Files\BlueStacks_nxt\HD-Player.exe"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, startupinfo=startupinfo)
+            subprocess.Popen([configs.BLUESTACKS_PATH], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, startupinfo=startupinfo)
         
         for _ in range(120):
             if self.check_bluestacks():
@@ -125,25 +125,30 @@ class CoC_Bot:
         except Exception:
             pass
 
-        # Fallback to Gemini vision for unknown screens
+        # Fallback to Gemini vision for unknown screens with retry logic
         if configs.USE_AI_GAME_STATE and configs.GEMINI_API_KEY != "":
-            try:
-                frame = Frame_Handler.get_frame(grayscale=False)
-                state = OCR_Handler.gemini_game_state(frame)
-                if state in ("home", "builder", "loading"):
-                    logger.info("[Bot] Gemini recognized game state: %s", state)
-                    return state
-                elif state in ("dialog", "attack"):
-                    # Popup or attack screen detected, try to dismiss/exit
-                    logger.debug("[Bot] Detected popup/dialog state, attempting to dismiss")
-                    Input_Handler.click_back()
-                    human_delay(0.5)
-                    # Re-check state after dismissal attempt
-                    return self._validate_game_state()
-            except (KeyboardInterrupt, SystemExit):
-                raise
-            except Exception:
-                pass
+            max_retries = 5
+            for attempt in range(max_retries):
+                try:
+                    frame = Frame_Handler.get_frame(grayscale=False)
+                    state = OCR_Handler.gemini_game_state(frame)
+                    if state in ("home", "builder", "loading"):
+                        logger.info("[Bot] Gemini recognized game state: %s", state)
+                        return state
+                    elif state in ("dialog", "attack"):
+                        # Popup or attack screen detected, try to dismiss/exit
+                        logger.debug("[Bot] Detected popup/dialog state, attempting to dismiss (attempt %d/%d)", attempt+1, max_retries)
+                        Input_Handler.click_back()
+                        human_delay(0.5)
+                        # Continue to next iteration to re-check
+                        continue
+                    else:
+                        return "unknown"
+                except (KeyboardInterrupt, SystemExit):
+                    raise
+                except Exception:
+                    pass
+                break  # Exit loop if Gemini check failed
 
         return "unknown"
 

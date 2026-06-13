@@ -1,4 +1,5 @@
 import sys
+import time
 import threading
 import logging
 from pathlib import Path
@@ -129,7 +130,7 @@ def connect_adb():
         mt_device = MNTDevice(ADB_ADDRESS)
         Exit_Handler.register(mt_device.stop)
     except (KeyboardInterrupt, SystemExit): raise
-    except:
+    except Exception:
         subprocess.run(["adb", "kill-server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         raise Exception("Failed to get ADB device.")
     ADB_DEVICE, MINITOUCH_DEVICE = device, mt_device
@@ -277,7 +278,7 @@ def parse_time(text):
         seconds = sum(int(v) * units[u] for v, u in pattern.findall(text))
         return seconds
     except (KeyboardInterrupt, SystemExit): raise
-    except: return 0
+    except Exception: return None
 
 def to_int_array(*args):
     import numpy as np
@@ -339,7 +340,7 @@ def send_notification(text):
                 timeout=(1, 2)
             )
         except (KeyboardInterrupt, SystemExit): raise
-        except: pass
+        except Exception: pass
     port = _local_gui_port()
     if port is not None:
         try:
@@ -349,7 +350,7 @@ def send_notification(text):
                 timeout=(1, 2)
             )
         except (KeyboardInterrupt, SystemExit): raise
-        except: pass
+        except Exception: pass
 
     if TELEGRAM_BOT_TOKEN != "":
         try:
@@ -360,7 +361,7 @@ def send_notification(text):
                 timeout=(1, 2)
             )
         except (KeyboardInterrupt, SystemExit): raise
-        except: pass
+        except Exception: pass
 
 def extend_pythonanywhere_hosting(username, password):
     import requests
@@ -1004,7 +1005,10 @@ class Asset_Manager:
         path = cls.resource_path("assets/misc")
         for file in os.listdir(path):
             if not file.endswith('.png'): continue
-            assets[file.replace('.png', '')] = cv2.cvtColor(cv2.imread(path / file, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
+            img = cv2.imread(str(path / file), cv2.IMREAD_COLOR)
+            if img is None:
+                raise FileNotFoundError(f"Asset not found: {path / file}")
+            assets[file.replace('.png', '')] = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         cls.misc_assets = assets
     
     @classmethod
@@ -1014,7 +1018,10 @@ class Asset_Manager:
         path = cls.resource_path("assets/upgrader")
         for file in os.listdir(path):
             if not file.endswith('.png'): continue
-            assets[file.replace('.png', '')] = cv2.cvtColor(cv2.imread(path / file, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
+            img = cv2.imread(str(path / file), cv2.IMREAD_COLOR)
+            if img is None:
+                raise FileNotFoundError(f"Asset not found: {path / file}")
+            assets[file.replace('.png', '')] = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         cls.upgrader_assets = assets
 
     @classmethod
@@ -1024,7 +1031,10 @@ class Asset_Manager:
         path = cls.resource_path("assets/attacker")
         for file in os.listdir(path):
             if not file.endswith('.png'): continue
-            assets[file.replace('.png', '')] = cv2.cvtColor(cv2.imread(path / file, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
+            img = cv2.imread(str(path / file), cv2.IMREAD_COLOR)
+            if img is None:
+                raise FileNotFoundError(f"Asset not found: {path / file}")
+            assets[file.replace('.png', '')] = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         cls.attacker_assets = assets
 
     @classmethod
@@ -1035,7 +1045,10 @@ class Asset_Manager:
         if not path.exists(): cls.magic_items_assets = assets; return
         for file in os.listdir(path):
             if not file.endswith('.png'): continue
-            assets[file.replace('.png', '')] = cv2.cvtColor(cv2.imread(path / file, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
+            img = cv2.imread(str(path / file), cv2.IMREAD_COLOR)
+            if img is None:
+                raise FileNotFoundError(f"Asset not found: {path / file}")
+            assets[file.replace('.png', '')] = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         cls.magic_items_assets = assets
 
 Asset_Manager.load_misc_assets()
@@ -1355,7 +1368,10 @@ class Frame_Handler:
     @classmethod
     def save_frame(cls, frame, filename="frame.png"):
         import cv2
-        cv2.imwrite(filename, cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+        if len(frame.shape) == 2:  # grayscale
+            cv2.imwrite(filename, frame)
+        else:
+            cv2.imwrite(filename, cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
 
     @classmethod
     def screenshot(cls, filename="debug/screenshot.png", grayscale=False):

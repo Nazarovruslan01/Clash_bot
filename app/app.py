@@ -166,11 +166,11 @@ def handle_notify(id):
         update_known_instances()
     return jsonify({"status": "success", "received": data})
 
-@app.route("/<id>/notifications", methods=["POST"])
+@app.route("/<id>/notifications", methods=["GET", "POST"])
 def handle_notifications(id):
     instance = instances.get(id)
     if not instance: abort(404)
-    n = request.json
+    n = request.json if request.method == "POST" else request.args.get("limit")
     limit = n if isinstance(n, int) else NOTIFICATION_CACHE_SIZE
     return jsonify(instance.get_notifications(limit))
 
