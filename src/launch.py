@@ -34,6 +34,8 @@ def gui_launch(args):
         procs[args.id] = p
     try:
         while True:
+            if not pipe.poll(1.0):
+                continue
             data = pipe.recv()
             if data == -1: raise SystemExit
             action, id = data.get("action"), data.get("id")

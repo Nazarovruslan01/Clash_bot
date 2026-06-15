@@ -5,7 +5,6 @@ import numpy as np
 from dataclasses import dataclass
 from utils import *
 import configs
-from configs import *
 
 logger = logging.getLogger("coc_bot")
 
@@ -478,6 +477,7 @@ class Upgrader:
                         break
                 if x_upgrade is None or y_upgrade is None:
                     if len(potential_y_locs) > 0 and invalid_y_locs[0] != -1 and min(abs(town_hall_loc[1] - np.array(potential_y_locs))) < 0.02:
+                        if configs.DEBUG: logger.debug("_home_upgrade_once: no valid row found, using Town Hall position as fallback")
                         x_upgrade, y_upgrade = menu_center, town_hall_loc[1]
                     else:
                         if configs.DEBUG: logger.debug("_home_upgrade_once: no valid random upgrade row found")
@@ -961,7 +961,7 @@ class Upgrader:
                             retry_count += 1
                             if retry_count >= self._MAX_UPGRADE_RETRIES:
                                 retry_count = 0
-                                continue
+                                break
                             human_delay(1.0, spread=0.2)
                         else:
                             retry_count = 0
@@ -1037,7 +1037,7 @@ class Upgrader:
                             retry_count += 1
                             if retry_count >= self._MAX_UPGRADE_RETRIES:
                                 retry_count = 0
-                                continue
+                                break
                             human_delay(1.0, spread=0.2)
                         else:
                             retry_count = 0

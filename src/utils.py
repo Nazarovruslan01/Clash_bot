@@ -4,13 +4,13 @@ import threading
 import logging
 from pathlib import Path
 from functools import lru_cache
+from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, Literal, overload
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 else:
     NDArray = Any
 import configs
-from configs import *
 
 logger = logging.getLogger("coc_bot")
 
@@ -320,7 +320,10 @@ def get_telegram_chat_id():
     if res.status_code == 200:
         res = res.json()
         if res["ok"] and len(res["result"]) > 0:
-            chat_id = res["result"][-1]["message"]["chat"]["id"]
+            messages = [r for r in res["result"] if "message" in r]
+            if not messages:
+                raise Exception("No direct messages found in Telegram updates")
+            chat_id = messages[-1]["message"]["chat"]["id"]
             data["telegram_chat_id"] = chat_id
             with portalocker.Lock(CACHE_PATH, "w", timeout=5) as f:
                 json.dump(data, f, indent=4)
@@ -352,11 +355,11 @@ def send_notification(text):
         except (KeyboardInterrupt, SystemExit): raise
         except Exception: pass
 
-    if TELEGRAM_BOT_TOKEN != "":
+    if configs.TELEGRAM_BOT_TOKEN != "":
         try:
-            telegram_text = f"[{INSTANCE_ID}]\n{text}"
+            telegram_text = f"[{configs.INSTANCE_ID}]\n{text}"
             requests.post(
-                f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+                f"https://api.telegram.org/bot{configs.TELEGRAM_BOT_TOKEN}/sendMessage",
                 data={"chat_id": get_telegram_chat_id(),"text": telegram_text},
                 timeout=(1, 2)
             )
@@ -406,7 +409,7 @@ def to_home_base():
         get_home_builders(1)
         return
     except (KeyboardInterrupt, SystemExit): raise
-    except: pass
+    except Exception: pass
 
     Input_Handler.zoom(dir="out")
     for _ in range(3):
@@ -477,13 +480,13 @@ def start_coc(timeout=120):
                 get_home_builders(10, return_amount=False, use_cached_frame=True)
                 break
             except (KeyboardInterrupt, SystemExit): raise
-            except: pass
+            except Exception: pass
 
             try:
                 get_builder_builders(10, return_amount=False, use_cached_frame=True)
                 break
             except (KeyboardInterrupt, SystemExit): raise
-            except: pass
+            except Exception: pass
 
             cont_x, cont_y = Frame_Handler.locate(Asset_Manager.misc_assets["continue"], grayscale=False, thresh=0.8, ref="cc", use_cached=True)
             if cont_x is not None and cont_y is not None:
@@ -497,7 +500,7 @@ def start_coc(timeout=120):
         logger.info("CoC started")
         return True
     except (KeyboardInterrupt, SystemExit): raise
-    except:
+    except Exception:
         return False
 
 def reset_devices():
@@ -530,7 +533,7 @@ def update_coc(timeout=10):
         u2.connect(ADB_ADDRESS)(text="Play").click(timeout=timeout)
         for _ in range(3): u2.connect(ADB_ADDRESS)(text="Play").click(timeout=0)
     except (KeyboardInterrupt, SystemExit): raise
-    except: pass
+    except Exception: pass
     to_system_home()
 
 def to_builder_base():
@@ -540,7 +543,7 @@ def to_builder_base():
         get_builder_builders(1)
         return
     except (KeyboardInterrupt, SystemExit): raise
-    except: pass
+    except Exception: pass
 
     for _ in range(3):
         Input_Handler.zoom(dir="in")
@@ -608,7 +611,7 @@ def require_exit(n=5, delay=0.1):
             result = None
             try: result = func(*args, **kwargs)
             except (KeyboardInterrupt, SystemExit): raise
-            except: pass
+            except Exception: pass
             Input_Handler.click_back(n, delay)
             return result
         return wrapper
@@ -635,7 +638,7 @@ class Exit_Handler:
         import signal
         for func in cls.RUN_AT_EXIT:
             try: func()
-            except: pass
+            except Exception: pass
         if sig == signal.SIGINT:
             raise KeyboardInterrupt
         sys.exit(0)
@@ -684,7 +687,7 @@ class Task_Handler:
         try:
             return "home_base_priority" in cls.get_exclusions(**kwargs)
         except (KeyboardInterrupt, SystemExit): raise
-        except:
+        except Exception:
             return not configs.PRIORITY_HOME_BASE_UPGRADES
 
     @classmethod
@@ -692,7 +695,7 @@ class Task_Handler:
         try:
             return "home_lab_priority" in cls.get_exclusions(**kwargs)
         except (KeyboardInterrupt, SystemExit): raise
-        except:
+        except Exception:
             return not configs.PRIORITY_HOME_LAB_UPGRADES
     
     @classmethod
@@ -700,7 +703,7 @@ class Task_Handler:
         try:
             return "builder_base_priority" in cls.get_exclusions(**kwargs)
         except (KeyboardInterrupt, SystemExit): raise
-        except:
+        except Exception:
             return not configs.PRIORITY_BUILDER_BASE_UPGRADES
     
     @classmethod
@@ -708,7 +711,7 @@ class Task_Handler:
         try:
             return "builder_lab_priority" in cls.get_exclusions(**kwargs)
         except (KeyboardInterrupt, SystemExit): raise
-        except:
+        except Exception:
             return not configs.PRIORITY_BUILDER_LAB_UPGRADES
 
     @classmethod
@@ -716,7 +719,7 @@ class Task_Handler:
         try:
             return "heroes" in cls.get_exclusions(**kwargs)
         except (KeyboardInterrupt, SystemExit): raise
-        except:
+        except Exception:
             return not configs.UPGRADE_HEROES
 
     @classmethod
@@ -724,7 +727,7 @@ class Task_Handler:
         try:
             return "home_base" in cls.get_exclusions(**kwargs)
         except (KeyboardInterrupt, SystemExit): raise
-        except:
+        except Exception:
             return not configs.UPGRADE_HOME_BASE
 
     @classmethod
@@ -732,7 +735,7 @@ class Task_Handler:
         try:
             return "builder_base" in cls.get_exclusions(**kwargs)
         except (KeyboardInterrupt, SystemExit): raise
-        except:
+        except Exception:
             return not configs.UPGRADE_BUILDER_BASE
 
     @classmethod
@@ -740,7 +743,7 @@ class Task_Handler:
         try:
             return "home_lab" in cls.get_exclusions(**kwargs)
         except (KeyboardInterrupt, SystemExit): raise
-        except:
+        except Exception:
             return not configs.UPGRADE_HOME_LAB
 
     @classmethod
@@ -748,7 +751,7 @@ class Task_Handler:
         try:
             return "builder_lab" in cls.get_exclusions(**kwargs)
         except (KeyboardInterrupt, SystemExit): raise
-        except:
+        except Exception:
             return not configs.UPGRADE_BUILDER_LAB
 
     @classmethod
@@ -756,7 +759,7 @@ class Task_Handler:
         try:
             return "home_attacks" in cls.get_exclusions(**kwargs)
         except (KeyboardInterrupt, SystemExit): raise
-        except:
+        except Exception:
             return not configs.ATTACK_HOME_BASE
 
     @classmethod
@@ -764,7 +767,7 @@ class Task_Handler:
         try:
             return "builder_attacks" in cls.get_exclusions(**kwargs)
         except (KeyboardInterrupt, SystemExit): raise
-        except:
+        except Exception:
             return not configs.ATTACK_BUILDER_BASE
 
     @classmethod
@@ -772,7 +775,7 @@ class Task_Handler:
         try:
             return "lab_assistant" in cls.get_exclusions(**kwargs)
         except (KeyboardInterrupt, SystemExit): raise
-        except:
+        except Exception:
             return not configs.ASSIGN_LAB_ASSISTANT
 
     @classmethod
@@ -780,7 +783,7 @@ class Task_Handler:
         try:
             return "builder_apprentice" in cls.get_exclusions(**kwargs)
         except (KeyboardInterrupt, SystemExit): raise
-        except:
+        except Exception:
             return not configs.ASSIGN_BUILDER_ASSISTANT
 
     @classmethod
@@ -794,6 +797,7 @@ class Task_Handler:
 class OCR_Handler:
 
     backoff_time = 0
+    _backoff_count = 0
     _model = None
 
     @classmethod
@@ -801,9 +805,15 @@ class OCR_Handler:
         import time
         if configs.GEMINI_API_KEY != "":
             if time.time() > cls.backoff_time:
-                try: return cls.external_ocr(frame)
+                try:
+                    result = cls.external_ocr(frame)
+                    cls._backoff_count = 0
+                    return result
                 except (KeyboardInterrupt, SystemExit): raise
-                except: cls.backoff_time = time.time() + 600
+                except Exception:
+                    cls._backoff_count += 1
+                    delay = min(60 * (2 ** (cls._backoff_count - 1)), 600)
+                    cls.backoff_time = time.time() + delay
         return cls.local_ocr(frame)
 
     @classmethod
@@ -1459,10 +1469,8 @@ class Frame_Handler:
     def batch_locate(cls, templates: list[NDArray], frame: NDArray | None = None, grayscale: bool = True, thresh: float = 0.0, ref: Literal["cc", "lc", "rc", "cb", "rb", "lb", "cr", "lr", "rr", "br"] = "cc", null_val: int | None = None, return_confidence: bool = False, return_all: bool = False, use_cached: bool = False) -> list[tuple[float | None, float | None]]: ...
     @classmethod
     def batch_locate(cls, templates: list[NDArray], frame: NDArray | None = None, grayscale: bool = True, thresh: float = 0.0, ref: Literal["cc", "lc", "rc", "cb", "rb", "lb", "cr", "lr", "rr", "br"] = "cc", null_val: int | None = None, return_confidence: bool = False, return_all: bool = False, use_cached: bool = False):
-        from concurrent.futures import ThreadPoolExecutor
-        
         if cls.pool is None:
-            cls.pool = ThreadPoolExecutor()
+            cls.pool = ThreadPoolExecutor(max_workers=4)
             Exit_Handler.register(cls.pool.shutdown)
         
         frame = cls.get_frame(grayscale=grayscale, use_cached=use_cached) if frame is None else frame

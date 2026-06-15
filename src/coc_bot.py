@@ -2,7 +2,6 @@ import logging
 import utils
 from utils import *
 import configs
-from configs import *
 from upgrader import Upgrader
 from attacker import Attacker
 

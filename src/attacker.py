@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from typing import Optional
 from utils import *
 import configs
-from configs import *
 
 logger = logging.getLogger("coc_bot")
 
@@ -66,6 +65,7 @@ class Attacker:
         while search_attempts < max_searches:
             search_attempts += 1
             # Find a match
+            xys = []
             for _ in range(20):
                 human_delay(0.5)
                 xys = Frame_Handler.locate(self.assets["find_a_match"], thresh=0.9, return_all=True)
@@ -471,7 +471,6 @@ class Attacker:
 
         except Exception as e:
             logger.error("Home: Attack error: %s", e)
-            if configs.DEBUG: logger.debug("attack_home_base: %s", e)
 
     @require_exit()
     def run_builder_base(self, timeout=60, restart=True):
@@ -499,4 +498,3 @@ class Attacker:
 
         except Exception as e:
             logger.error("Builder: Attack error: %s", e)
-            if configs.DEBUG: logger.debug("attack_builder_base: %s", e)

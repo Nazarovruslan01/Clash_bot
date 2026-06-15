@@ -14,7 +14,7 @@ import time
 import socket
 from collections import deque
 from flask import Flask, render_template, jsonify, abort, request
-from configs import *
+import configs
 
 NOTIFICATION_CACHE_SIZE = 3
 

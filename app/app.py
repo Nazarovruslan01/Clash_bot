@@ -112,7 +112,7 @@ def handle_end_time(id):
     instance = instances.get(id)
     if not instance: abort(404)
     if request.method == "POST":
-        data = request.json.get("time", 0)
+        data = (request.json or {}).get("time", 0)
         with _lock:
             instance.end_time = int(data) * 60 + time.time()
             update_known_instances()
@@ -130,7 +130,7 @@ def handle_status(id):
     instance = instances.get(id)
     if not instance: abort(404)
     if request.method == "POST":
-        data = request.json
+        data = request.json or {}
         with _lock:
             instance.run_status = data.get("status", "")
             update_known_instances()
@@ -142,7 +142,7 @@ def handle_exclude(id):
     instance = instances.get(id)
     if not instance: abort(404)
     if request.method == "POST":
-        data = request.json
+        data = request.json or {}
         action = data.get("action", "")
         item = str(data.get("item", "")).strip()
         if not item:
@@ -159,6 +159,8 @@ def handle_exclude(id):
 @app.route("/<id>/notify", methods=["POST"])
 def handle_notify(id):
     data = request.json
+    if data is None:
+        abort(400)
     instance = instances.get(id)
     if not instance: abort(404)
     with _lock:
@@ -170,7 +172,7 @@ def handle_notify(id):
 def handle_notifications(id):
     instance = instances.get(id)
     if not instance: abort(404)
-    n = request.json if request.method == "POST" else request.args.get("limit")
+    n = request.json if (request.method == "POST" and request.json is not None) else request.args.get("limit")
     limit = n if isinstance(n, int) else NOTIFICATION_CACHE_SIZE
     return jsonify(instance.get_notifications(limit))
 
