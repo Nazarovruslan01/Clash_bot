@@ -60,7 +60,7 @@ def get_gui():
     return COC_BOT_GUI
 
 if __name__ == "__main__":
-    pipe = init_gui(None, debug=True)
+    pipe = init_gui(None, debug=configs.DEBUG)
     while True:
         try: logger.debug("GUI Received: %s", pipe.recv())
         except EOFError: break

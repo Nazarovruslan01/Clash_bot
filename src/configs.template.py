@@ -22,6 +22,7 @@ BLUESTACKS_PATH = r"C:\Program Files\BlueStacks_nxt\HD-Player.exe" # Path to Blu
 # REQUIRED: General Settings
 LOCAL_GUI = True # web app not required
 CHECK_INTERVAL = 5 * 60 # seconds
+CHECK_INTERVAL_JITTER = 60  # seconds of random variation (±60s around CHECK_INTERVAL)
 
 # REQUIRED: Upgrade settings
 MAX_UPGRADES_PER_CHECK = 10 # applies to both home and builder base
@@ -140,3 +141,18 @@ DEBUG = False
 DISABLE_DEVICE_SLEEP = True
 WINDOW_DIMS = (1920, 1080) # width, height
 ADB_ABS_DIR = "" # absolute path to dir with adb executable, leave empty to use system PATH
+
+########################
+# == AI Features ==   #
+########################
+USE_AI_GAME_STATE = True       # use Gemini Vision for screen state detection
+USE_AI_POPUP_DISMISS = True    # use Gemini Vision to dismiss popups
+USE_AI_ATTACK_ANALYSIS = True  # use Gemini Vision for base analysis
+USE_AI_MATCH_FILTER = False    # use Gemini Vision to filter matches by loot
+
+USE_RESOURCE_CHECK = False     # skip attacks if loot is below minimums
+MIN_LOOT_GOLD = 0
+MIN_LOOT_ELIXIR = 0
+MIN_LOOT_DARK_ELIXIR = 0
+
+MAX_MATCH_SEARCHES = 5         # max number of match searches before giving up

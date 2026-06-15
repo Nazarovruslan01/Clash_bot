@@ -979,6 +979,7 @@ class Upgrader:
             if not exclude_lab:
                 lab_available = self.home_lab_available(1)
                 if not lab_available and configs.USE_RESEARCH_POTION and not Task_Handler.magic_items_excluded(use_cached=True):
+                    # TODO: magic_items assets (assets/magic_items/) are missing — potion use has no effect until added
                     self.use_potion("research_potion")
                     lab_available = self.home_lab_available(1)
             if lab_available:
