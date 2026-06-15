@@ -148,7 +148,6 @@ class CoC_Bot:
                     raise
                 except Exception:
                     pass
-                break  # Exit loop if Gemini check failed
 
         return "unknown"
 

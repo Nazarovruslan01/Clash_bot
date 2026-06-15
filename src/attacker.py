@@ -157,7 +157,10 @@ class Attacker:
         frame_gray = cv2.equalizeHist(frame_gray)
         edges = cv2.convertScaleAbs(np.abs(cv2.Sobel(frame_gray, cv2.CV_64F, 1, 0, ksize=3)))
         profile = np.sum(edges, axis=0)
-        profile = (profile - profile.min()) / (profile.max() - profile.min())
+        denom = profile.max() - profile.min()
+        if denom == 0:
+            return [], [], [], [], type_gaps_seen
+        profile = (profile - profile.min()) / denom
         peaks = scipy.signal.find_peaks(profile, height=0.8, distance=10)[0]
         peaks_norm =  peaks / orig_w + clip_left
         
@@ -382,7 +385,11 @@ class Attacker:
         while total_slots_seen < ATTACK_SLOT_RANGE[1] - ATTACK_SLOT_RANGE[0] + 1:
             frame = Frame_Handler.get_frame_section(0.0, 0.82, 1.0, 1.0, grayscale=False)
             # Find troops to deploy
-            card_centers, card_boundaries, card_types, card_counts, type_gaps_seen = self.detect_troop_positions(frame, clip_left=last_card_left, type_gaps_seen=type_gaps_seen, return_boundaries=True, return_types=True, return_counts=True)
+            try:
+                card_centers, card_boundaries, card_types, card_counts, type_gaps_seen = self.detect_troop_positions(frame, clip_left=last_card_left, type_gaps_seen=type_gaps_seen, return_boundaries=True, return_types=True, return_counts=True)
+            except Exception as e:
+                logger.warning("detect_troop_positions failed: %s", e)
+                break
             
             if len(card_centers) == 0: break
 
@@ -450,7 +457,8 @@ class Attacker:
                     get_home_builders(1)
                     break
                 except (KeyboardInterrupt, SystemExit): raise
-                except Exception: pass
+                except Exception as e:
+                    if configs.DEBUG: logger.debug("wait loop error: %s", e)
             if time.time() - start_time >= timeout: return
             
             # Complete an attack
@@ -477,7 +485,8 @@ class Attacker:
                     get_builder_builders(1)
                     break
                 except (KeyboardInterrupt, SystemExit): raise
-                except Exception: pass
+                except Exception as e:
+                    if configs.DEBUG: logger.debug("wait loop error: %s", e)
             if time.time() - start_time >= timeout: return
             
             # Complete an attack
