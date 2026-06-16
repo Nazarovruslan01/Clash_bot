@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 else:
     NDArray = Any
 import configs
+from configs import WEB_APP_URL
 
 logger = logging.getLogger("coc_bot")
 
@@ -29,7 +30,7 @@ else:
 INSTANCE_ID = None
 GUI_SERVER_PORT = None
 ADB_ADDRESS, ADB_DEVICE, MINITOUCH_DEVICE = None, None, None
-ADB_WINDOW_DIMS = WINDOW_DIMS
+ADB_WINDOW_DIMS = configs.WINDOW_DIMS
 
 _COC_PACKAGE = "com.supercell.clashofclans"
 _COC_ACTIVITY = "com.supercell.titan.GameApp"
