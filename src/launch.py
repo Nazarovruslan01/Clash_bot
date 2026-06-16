@@ -12,19 +12,21 @@ def launch_proc(id, gui_server_port=None):
     bot.run()
 
 def cmd_launch(args):
+    import configs
     import utils
-    if utils.DISABLE_DEVICE_SLEEP: utils.disable_sleep()
+    if configs.DISABLE_DEVICE_SLEEP: utils.disable_sleep()
     launch_proc(args.id)
 
 def gui_launch(args):
     from multiprocessing import Process
+    import configs
     import utils
     from gui import init_gui, get_gui
     
     procs = {}
     pipe = init_gui(args.id)
     
-    if utils.DISABLE_DEVICE_SLEEP: Process(target=utils.disable_sleep).start()
+    if configs.DISABLE_DEVICE_SLEEP: Process(target=utils.disable_sleep).start()
     
     server_port = get_gui().server_port
 
