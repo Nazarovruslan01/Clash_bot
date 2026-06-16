@@ -1,3 +1,9 @@
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).parent / ".env")
+
 ######################
 # == User Configs == #
 ######################
@@ -10,7 +16,7 @@ WEB_APP_URL = "" # (e.g. 12.34.567.890:1234)
 PA_USERNAME, PA_PASSWORD = "", "" # only if using pythonanywhere to auto extend hosting
 
 # OPTIONAL: Gemini API key for faster/more accurate OCR (enter empty string to disable)
-GEMINI_API_KEY = ""
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = "gemini-2.5-flash"
 
 # REQUIRED: Instance Settings

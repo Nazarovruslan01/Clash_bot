@@ -3,7 +3,7 @@ import time
 import threading
 import logging
 from pathlib import Path
-from functools import lru_cache
+from functools import lru_cache, wraps
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, Literal, overload
 if TYPE_CHECKING:
@@ -30,6 +30,9 @@ INSTANCE_ID = None
 GUI_SERVER_PORT = None
 ADB_ADDRESS, ADB_DEVICE, MINITOUCH_DEVICE = None, None, None
 ADB_WINDOW_DIMS = WINDOW_DIMS
+
+_COC_PACKAGE = "com.supercell.clashofclans"
+_COC_ACTIVITY = "com.supercell.titan.GameApp"
 
 def parse_args(debug=None, id=None, gui=None):
     import argparse
@@ -402,6 +405,22 @@ def extend_pythonanywhere_hosting(username, password):
     )
     assert res.url == webapps_url
 
+def _click_boat_icon():
+    import cv2
+    import numpy as np
+    scale_templates = []
+    for scale in np.arange(0.43, 0.47, 0.01):
+        template = cv2.resize(Asset_Manager.misc_assets["boat_icon"], None, fx=scale, fy=scale, interpolation=cv2.INTER_NEAREST)
+        scale_templates.append(template)
+    for _ in range(5):
+        xys = Frame_Handler.batch_locate(scale_templates, grayscale=True, thresh=0.7, ref="cc")
+        for x, y in xys:
+            if x is None or y is None: continue
+            Input_Handler.click(x, y, jitter=False)
+            human_delay(2.0, spread=0.2)
+            return
+    raise Exception("Failed to click boat icon")
+
 def to_home_base():
     import cv2, time, numpy as np
 
@@ -423,19 +442,7 @@ def to_home_base():
             x2=0.0,
         )
 
-    scale_templates = []
-    for scale in np.arange(0.43, 0.47, 0.01):
-        template = cv2.resize(Asset_Manager.misc_assets["boat_icon"], None, fx=scale, fy=scale, interpolation=cv2.INTER_NEAREST)
-        scale_templates.append(template)
-
-    for _ in range(5):
-        xys = Frame_Handler.batch_locate(scale_templates, grayscale=True, thresh=0.7, ref="cc")
-        for x, y in xys:
-            if x is None or y is None: continue
-            Input_Handler.click(x, y, jitter=False)
-            human_delay(2.0, spread=0.2)
-            return
-    raise Exception("Failed to navigate to home base")
+    _click_boat_icon()
 
 def get_home_builders(timeout=60, return_amount=True, raise_exception=True, use_cached_frame=False):
     import time, cv2, re
@@ -472,7 +479,7 @@ def start_coc(timeout=120):
         start = time.time()
         while time.time() - start < timeout:
             if not running(): return False
-            safe_adb_shell(f"am start {'-S' if i==0 else ''} -W -n com.supercell.clashofclans/com.supercell.titan.GameApp", timeout=30)
+            safe_adb_shell(f"am start {'-S' if i==0 else ''} -W -n {_COC_PACKAGE}/{_COC_ACTIVITY}", timeout=30)
             human_delay(25, spread=0.4)
             Frame_Handler.get_frame()
 
@@ -515,7 +522,7 @@ def stop_coc():
         return
     logger.info("Stopping CoC...")
     try:
-        safe_adb_shell("am force-stop com.supercell.clashofclans", timeout=30)
+        safe_adb_shell(f"am force-stop {_COC_PACKAGE}", timeout=30)
     except (KeyboardInterrupt, SystemExit): raise
     except Exception as e:
         if configs.DEBUG: logger.debug("stop_coc force-stop failed: %s", e)
@@ -528,7 +535,7 @@ def stop_coc():
 
 def update_coc(timeout=10):
     import uiautomator2 as u2
-    safe_adb_shell('am start -a android.intent.action.VIEW -d "market://details?id=com.supercell.clashofclans"', timeout=30)
+    safe_adb_shell(f'am start -a android.intent.action.VIEW -d "market://details?id={_COC_PACKAGE}"', timeout=30)
     try:
         u2.connect(ADB_ADDRESS)(text="Play").click(timeout=timeout)
         for _ in range(3): u2.connect(ADB_ADDRESS)(text="Play").click(timeout=0)
@@ -553,20 +560,7 @@ def to_builder_base():
         Input_Handler.swipe_right()
         Input_Handler.swipe_up()
 
-    scale_templates = []
-    for scale in np.arange(0.43, 0.47, 0.01):
-        template = cv2.resize(Asset_Manager.misc_assets["boat_icon"], None, fx=scale, fy=scale, interpolation=cv2.INTER_NEAREST)
-        scale_templates.append(template)
-
-    for _ in range(5):
-        xys = Frame_Handler.batch_locate(scale_templates, grayscale=True, thresh=0.7, ref="cc")
-        for x, y in xys:
-            if x is None or y is None: continue
-            Input_Handler.click(x, y, jitter=False)
-            human_delay(2.0, spread=0.2)
-            return
-        Input_Handler.swipe(x1=0.5, y1=0.5, x2=0.25, y2=0.75, hold_end_time=100)
-    raise Exception("Failed to navigate to builder base")
+    _click_boat_icon()
 
 def get_builder_builders(timeout=60, return_amount=True, raise_exception=True, use_cached_frame=False):
     import time, cv2, re
@@ -607,6 +601,7 @@ def human_delay(base, spread=0.3):
 
 def require_exit(n=5, delay=0.1):
     def decorator(func):
+        @wraps(func)
         def wrapper(*args, **kwargs):
             result = None
             try: result = func(*args, **kwargs)
@@ -1441,7 +1436,7 @@ class Frame_Handler:
             results.sort(key=lambda r: r[-1] if return_confidence else 0, reverse=True)
             return results
         
-        if max_val > thresh:
+        if max_val >= thresh:
             x_loc, y_loc = max_loc
             if ref[0] == 'c': x_loc += w / 2
             elif ref[0] == 'r': x_loc += w

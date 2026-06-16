@@ -8,6 +8,8 @@ import configs
 
 logger = logging.getLogger("coc_bot")
 
+_RESOURCE_SHORTAGE_COLOR = (255, 136, 127)
+
 @dataclass
 class Resources:
     """Represents current resource counts on home base."""
@@ -165,13 +167,13 @@ class Upgrader:
     # 💰 Resource & Builder Tracking
     # ============================================================
 
-    def home_lab_available(self, timeout=60):
+    def home_lab_available(self, _timeout=60):
         # TH17 top bar has no lab indicator — availability is now detected during upgrade attempt.
         # Always returns True to allow upgrade_attempt to handle lab-busy cases.
         # Callers should handle lab exhaustion in home_lab_upgrade() result instead.
         return True
 
-    def builder_lab_available(self, timeout=60):
+    def builder_lab_available(self, _timeout=60):
         # Builder base top bar has no lab indicator — let the upgrade attempt detect if lab is busy
         return True
 
@@ -285,7 +287,7 @@ class Upgrader:
             return bounds, centers
         
         menu_white = _mask_color(menu, [255, 255, 255], tol=0) / 255
-        menu_red = _mask_color(menu, (255, 136, 127), tol=10) / 255
+        menu_red = _mask_color(menu, _RESOURCE_SHORTAGE_COLOR, tol=10) / 255
         white_profile = np.where(menu_white.mean(axis=1) > 0.01, 1, 0)
         red_profile = np.where(menu_red.mean(axis=1) > 0.01, 1, 0)
         _, white_centers = profile_bounds(white_profile)
@@ -377,7 +379,7 @@ class Upgrader:
                 for x, y in match_list:
                     if x is not None and y is not None and (y_sug_cur is None or y > y_sug_cur):
                         section = Frame_Handler.crop(frame, menu_left, y-0.02, menu_right, y+0.02)
-                        if not check_color((255, 136, 127), section, tol=10):
+                        if not check_color(_RESOURCE_SHORTAGE_COLOR, section, tol=10):
                             if abs(x - menu_left) < 0.01:
                                 return (x, y, name) if return_name else (x, y)
                             new_x, new_y = Frame_Handler.locate(
@@ -666,7 +668,7 @@ class Upgrader:
             if x is None or y is None: return None, None
             section = Frame_Handler.get_frame_section(x-0.08, y+0.02, x+0.08, y+0.1, grayscale=False, thresh=255, use_cached=True)
             if configs.DEBUG: Frame_Handler.save_frame(section, "debug/lab_upgrade_cost.png")
-            if check_color((255, 136, 127), section, tol=10): return None, None
+            if check_color(_RESOURCE_SHORTAGE_COLOR, section, tol=10): return None, None
             Input_Handler.click(x, y+0.05)
             human_delay(0.5)
             
@@ -979,7 +981,7 @@ class Upgrader:
             if not exclude_lab:
                 lab_available = self.home_lab_available(1)
                 if not lab_available and configs.USE_RESEARCH_POTION and not Task_Handler.magic_items_excluded(use_cached=True):
-                    # TODO: magic_items assets (assets/magic_items/) are missing — potion use has no effect until added
+                    # NOTE: magic_items assets (assets/magic_items/) are missing — _use_potion returns False if assets not found
                     self.use_potion("research_potion")
                     lab_available = self.home_lab_available(1)
             if lab_available:
