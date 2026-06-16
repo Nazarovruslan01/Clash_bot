@@ -1,9 +1,12 @@
 import logging
 import utils
-from utils import *
 import configs
 from upgrader import Upgrader
 from attacker import Attacker
+from utils import (
+    Frame_Handler, Input_Handler, WEB_APP_URL, human_delay,
+    to_system_home, start_coc, stop_coc, Exit_Handler, reset_devices
+)
 
 logger = logging.getLogger("coc_bot")
 
@@ -90,9 +93,6 @@ class CoC_Bot:
             logger.warning("BlueStacks not running, restarting...")
             self.start_bluestacks()
         self.connect_adb()
-
-        if utils.ADB_WINDOW_DIMS != configs.WINDOW_DIMS:
-            logger.warning("ADB dimensions %s differ from config %s", utils.ADB_WINDOW_DIMS, configs.WINDOW_DIMS)
 
         # Verify minitouch is responsive
         if not Input_Handler.health_check():

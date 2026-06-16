@@ -1,8 +1,12 @@
 import logging
 from dataclasses import dataclass
 from typing import Optional
-from utils import *
 import configs
+from utils import (
+    Frame_Handler, Input_Handler, Asset_Manager, OCR_Handler,
+    human_delay, get_home_builders, get_builder_builders,
+    to_home_base, to_builder_base, _click_boat_icon, render_text, require_exit
+)
 
 logger = logging.getLogger("coc_bot")
 

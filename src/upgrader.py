@@ -3,8 +3,13 @@ import time
 import re
 import numpy as np
 from dataclasses import dataclass
-from utils import *
 import configs
+from utils import (
+    Frame_Handler, Input_Handler, Asset_Manager, OCR_Handler,
+    human_delay, to_home_base, to_builder_base,
+    get_home_builders, get_builder_builders, Task_Handler,
+    render_text, check_color, _click_boat_icon, require_exit
+)
 
 logger = logging.getLogger("coc_bot")
 
