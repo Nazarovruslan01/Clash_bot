@@ -18,7 +18,9 @@ from configs import (
     UPGRADE_HEROES, UPGRADE_HOME_BASE, UPGRADE_BUILDER_BASE,
     UPGRADE_HOME_LAB, UPGRADE_BUILDER_LAB, ATTACK_HOME_BASE,
     ATTACK_BUILDER_BASE, ASSIGN_LAB_ASSISTANT, ASSIGN_BUILDER_ASSISTANT,
-    INSTANCE_IDS, WEB_APP_URL
+    INSTANCE_IDS, WEB_APP_URL, PRIORITY_HOME_BASE_UPGRADES,
+    PRIORITY_HOME_LAB_UPGRADES, PRIORITY_BUILDER_BASE_UPGRADES,
+    PRIORITY_BUILDER_LAB_UPGRADES
 )
 
 NOTIFICATION_CACHE_SIZE = 3
@@ -42,6 +44,10 @@ class Instance:
             "builder_attacks": not ATTACK_BUILDER_BASE,
             "lab_assistant": not ASSIGN_LAB_ASSISTANT,
             "builder_apprentice": not ASSIGN_BUILDER_ASSISTANT,
+            "home_base_priority": not PRIORITY_HOME_BASE_UPGRADES,
+            "home_lab_priority": not PRIORITY_HOME_LAB_UPGRADES,
+            "builder_base_priority": not PRIORITY_BUILDER_BASE_UPGRADES,
+            "builder_lab_priority": not PRIORITY_BUILDER_LAB_UPGRADES,
             "magic_items": False,
         }
         self.exclusions = set(k for k, v in task_settings.items() if v)

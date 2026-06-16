@@ -457,7 +457,7 @@ class Upgrader:
                     dir="down" if configs.START_FROM_MENU_TOP else "up",
                 )
                 if x is None or y is None:
-                    if configs.DEBUG: logger.debug("_home_upgrade_once: priority item not found in menu (%s)", upgrade_text)
+                    logger.info("_home_upgrade_once: priority item not found in menu (%s)", upgrade_text)
                     return None, None
                 Input_Handler.click(x_sug, y)
             else:
@@ -576,8 +576,9 @@ class Upgrader:
                 upgrade_name, completion_time = self._home_upgrade_once(filtered_level, exclude_heroes=exclude_heroes)
                 if upgrade_name is not None:
                     return upgrade_name, completion_time
-                # Track failed upgrade from this priority level
-                if upgrade_name is None and filtered_level:
+                # Only mark items as failed if we successfully searched through them (menu was open)
+                # If both are None, menu opening failed or resource check failed — don't penalize the items
+                if upgrade_name is None and completion_time is not None and filtered_level:
                     for u in filtered_level:
                         if u not in self.last_failed_upgrades:
                             self.last_failed_upgrades[u] = now
