@@ -14,7 +14,12 @@ import time
 import socket
 from collections import deque
 from flask import Flask, render_template, jsonify, abort, request
-import configs
+from configs import (
+    UPGRADE_HEROES, UPGRADE_HOME_BASE, UPGRADE_BUILDER_BASE,
+    UPGRADE_HOME_LAB, UPGRADE_BUILDER_LAB, ATTACK_HOME_BASE,
+    ATTACK_BUILDER_BASE, ASSIGN_LAB_ASSISTANT, ASSIGN_BUILDER_ASSISTANT,
+    INSTANCE_IDS, WEB_APP_URL
+)
 
 NOTIFICATION_CACHE_SIZE = 3
 
